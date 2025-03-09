@@ -7,11 +7,14 @@ use crossterm::{
 };
 use std::io::{self, stdout};
 mod map;
+mod entities;
+mod id_generator;
 
 use map::Map;
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     enable_raw_mode()?;
+    let mut id_generator = id_generator::IDGenerator::new();
     let mut stdout = stdout();
     let backend = CrosstermBackend::new(stdout);
     let mut terminal = Terminal::new(backend)?;
