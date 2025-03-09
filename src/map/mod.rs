@@ -44,7 +44,7 @@ impl Map {
             rows,
             cols,
             entities,
-            map_matrix: vec![vec!['-'; cols as usize]; rows as usize],
+            map_matrix: vec![vec![' '; cols as usize]; rows as usize],
         }
     }
 
@@ -62,20 +62,30 @@ impl Map {
         }
         result_map
     }
-    pub fn generate_map_obstacles(&mut self, seed: u64){
+    pub fn generate_map_obstacles(&mut self, seed: u64) {
         let perlin = Perlin::new();
-        let scale = 50.0;
+        let scale = ((self.rows + self.cols) as f64) / 10.0;
         let mut rng = StdRng::seed_from_u64(seed);
 
-        let threshold = rng.gen::<f64>();
+        let threshold = perlin.get([seed as f64 / 100.0, seed as f64 / 100.0]);
+
+        let safe_zone_size = (self.rows.min(self.cols) as f64 * 0.3) as u32;
+        let center_x = self.rows / 2;
+        let center_y = self.cols / 2;
+
         for i in 0..self.rows {
             for j in 0..self.cols {
+                if (i as i32 - center_x as i32).abs() < 3 / 2
+                    && (j as i32 - center_y as i32).abs() < 3 / 2 {
+                    continue;
+                }
+
                 let noise_value = perlin.get([i as f64 / scale, j as f64 / scale]);
-    
-                if noise_value > threshold {
-                    self.map_matrix[i as usize][j as usize] = '8'
+
+                if noise_value > threshold + 0.2 {
+                    self.map_matrix[i as usize][j as usize] = '8';
                 }
             }
         }
-    }    
+    }
 }

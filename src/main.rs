@@ -1,77 +1,45 @@
-use ratatui::{
-    backend::CrosstermBackend,
-    widgets::{Block, Borders, Row, Table},
-    style::{Style, Color},
-    Terminal,
-};
-use ratatui::prelude::Constraint;
-use std::io::{self, stdout};
-use crossterm::{
-    event::{self, Event, KeyCode},
-    terminal::{enable_raw_mode, disable_raw_mode},
-};
-mod map; 
+use ratatui::prelude::*;
+use ratatui::widgets::{Block, Borders, Paragraph};
+use ratatui::backend::TermionBackend;
+use std::io;
+use ratatui::text::{Text, Span};
+mod map;
 
-fn main() -> Result<(), Box<dyn std::error::Error>> {
-    enable_raw_mode()?;
-    let mut stdout = stdout();
-    let backend = CrosstermBackend::new(stdout);
-    let mut terminal = Terminal::new(backend)?;
+use map::{Map, Nature, Entity};
 
-    let rows = 10;
-    let cols = 10;
-    let seed = 42;
-    let mut game_map = map::Map::new(rows, cols, seed);
+fn main() {
+    let stdout = io::stdout();
+    let backend = TermionBackend::new(stdout);
+    let mut terminal = Terminal::new(backend).unwrap();
 
-    let bot = map::Entity {
-        id: 1,
-        loc: map::Localization { x: 5, y: 5 },
-        nature: map::Nature::Bot {
-            function: 1,
-            display: 'B',
-        },
-    };
-    game_map.entities.insert(bot.id, bot);
+    let mut map = Map::new(50, 100, 42);
+    map.generate_map_obstacles(42);
+    let matrix = map.generate_display();
 
-    game_map.generate_map_obstacles(seed);
+    terminal.clear().unwrap();
 
-    loop {
-        terminal.draw(|f| {
-            let size = f.size();
+    terminal.draw(|f| {
+        let size = f.size();
 
-            let map_matrix = game_map.generate_display();
-            let rows = map_matrix.iter().map(|row| {
-                Row::new(row.iter().map(|&c| c.to_string()).collect::<Vec<String>>())  
-            });
+        let max_rows = size.height as usize;
+        let max_cols = size.width as usize;
 
-            // Création de la table avec les dimensions des colonnes
-            let table = Table::new(
-                rows,
-                [
-                    // Largeur des colonnes
-                    Constraint::Length(4),
-                    Constraint::Length(5),
-                    Constraint::Length(7),
-                ],
-            )
-            .block(Block::default().borders(Borders::ALL).title("Matrice"))
-            .style(Style::default().fg(Color::White));
+        let matrix_rows = matrix.len();
+        let matrix_cols = if matrix_rows > 0 { matrix[0].len() } else { 0 };
 
-            // Rendu de la table sur le terminal
-            f.render_widget(table, size);
-        })?;
+        let rows_to_display = std::cmp::min(matrix_rows, max_rows);
+        let cols_to_display = std::cmp::min(matrix_cols, max_cols);
 
-        // Gestion des événements (sortir si l'utilisateur appuie sur 'q')
-        if event::poll(std::time::Duration::from_millis(500))? {
-            if let Event::Key(key) = event::read()? {
-                if key.code == KeyCode::Char('q') {
-                    break; // Quitter la boucle si 'q' est pressé
-                }
+        let block = Block::default().borders(Borders::ALL).title("Matrice");
+        f.render_widget(block, size);
+
+        for i in 0..rows_to_display {
+            for j in 0..cols_to_display {
+                let x = j as u16;
+                let y = i as u16;
+                let text = Text::from(Span::raw(matrix[i][j].to_string()));
+                f.render_widget(Paragraph::new(text), Rect::new(x, y, 1, 1));
             }
         }
-    }
-
-    disable_raw_mode()?;
-    Ok(())
+    }).unwrap();
 }
-
