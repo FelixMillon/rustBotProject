@@ -629,6 +629,7 @@ dependencies = [
  "noise",
  "rand 0.8.5",
  "ratatui",
+ "termion",
 ]
 
 [[package]]
