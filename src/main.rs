@@ -6,7 +6,6 @@ use crossterm::{
     terminal::{enable_raw_mode, disable_raw_mode},
 };
 use std::io::{self, stdout};
-use rand::prelude::*;  // Pour test A EFFACER
 mod map;
 
 use map::Map;
@@ -17,8 +16,8 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let backend = CrosstermBackend::new(stdout);
     let mut terminal = Terminal::new(backend)?;
 
-    let mut map = Map::new(20, 40, 42);
-    map.generate_map_obstacles(42);
+    let mut map = Map::new(20, 40, 43);
+    map.generate_map_obstacles();
 
     terminal.clear().unwrap();
 
@@ -40,9 +39,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         if event::poll(std::time::Duration::from_millis(500))? {
             if let Event::Key(key) = event::read()? {
                 match key.code {
-                    KeyCode::Char('m') => {
-                        place_random_star(&mut map);
-
+                    KeyCode::Char('m') => { // reafficher la carte pour evolution. A remplacer par tic.
                         terminal.draw(|f| {
                             let size = f.size();
                             let block = Block::default().borders(Borders::ALL).title("Map");
@@ -58,7 +55,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                             }
                         }).unwrap();
                     }
-                    KeyCode::Esc => {
+                    KeyCode::Esc | KeyCode::Char('q') => {
                         break;
                     }
                     _ => {}
@@ -68,22 +65,4 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     }
     disable_raw_mode()?;
     Ok(())
-}
-
-fn place_random_star(map: &mut Map) {
-    let mut rng = rand::thread_rng();
-    let mut empty_positions: Vec<(usize, usize)> = Vec::new();
-
-    for (i, row) in map.map_matrix.iter().enumerate() {
-        for (j, &cell) in row.iter().enumerate() {
-            if cell == ' ' {
-                empty_positions.push((i, j));
-            }
-        }
-    }
-
-    if !empty_positions.is_empty() {
-        let (x, y) = empty_positions.choose(&mut rng).unwrap();
-        map.map_matrix[*x][*y] = '*';
-    }
 }

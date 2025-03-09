@@ -6,6 +6,7 @@ use std::f64;
 pub struct Map {
     pub cols: u32,
     pub rows: u32,
+    pub seed: u64,
     pub entities: HashMap<u32, Entity>,  
     pub map_matrix: Vec<Vec<char>>
 }
@@ -44,6 +45,7 @@ impl Map {
         Self {
             rows,
             cols,
+            seed,
             entities,
             map_matrix: vec![vec![' '; cols as usize]; rows as usize],
         }
@@ -64,12 +66,12 @@ impl Map {
         result_map
     }
 
-    pub fn generate_map_obstacles(&mut self, seed: u64) {
+    pub fn generate_map_obstacles(&mut self) {
         let perlin = Perlin::new();
         let scale = ((self.rows + self.cols) as f64) / 10.0;
-        let mut rng = StdRng::seed_from_u64(seed);
+        let mut rng = StdRng::seed_from_u64(self.seed);
     
-        let threshold = perlin.get([seed as f64 / 100.0, seed as f64 / 100.0]);
+        let threshold = perlin.get([self.seed as f64 / 100.0, self.seed as f64 / 100.0]);
     
         for i in 0..self.rows {
             for j in 0..self.cols {
