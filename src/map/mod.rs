@@ -3,6 +3,7 @@ use noise::{NoiseFn, Perlin};
 use rand::prelude::*;
 use std::f64;
 
+use crate::id_generator::IDGenerator;
 use crate::entities::*;
 
 
@@ -23,6 +24,23 @@ impl Map {
             seed,
             entities,
             map_matrix: vec![vec![' '; cols as usize]; rows as usize],
+        }
+    }
+    pub fn add_bot(
+        &mut self,
+        x: u32,
+        y: u32,
+        mission_str: &str,
+        id_generator: &mut IDGenerator
+    ){
+        if let Some(mission) = Mission::from_str(mission_str) {
+            let loc = Localization { x, y };
+            let nature = Nature::Bot { mission };
+            if let Some(entity) = Entity::new_bot(loc, nature, id_generator) {
+                self.entities.insert(entity.id, entity);
+            }
+        } else {
+            eprintln!("Mission inconnue : {}", mission_str);
         }
     }
 

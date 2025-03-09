@@ -21,6 +21,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     let mut map = Map::new(20, 40, 43);
     map.generate_map_obstacles();
+    map.add_bot(3,3,"scout",&mut id_generator);
 
     terminal.clear().unwrap();
 

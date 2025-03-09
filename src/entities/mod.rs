@@ -13,6 +13,7 @@ pub struct Entity {
 }
 
 pub struct Resource {
+    pub kind: ResourceKind,
     pub available : u16,
     pub consumed: u16,
 }
@@ -30,6 +31,11 @@ pub enum Mission {
     Scout,
     Gatherer
 }
+
+pub enum ResourceKind {
+    Crystal,
+    Energy
+}
 impl Mission {
     pub fn from_str(mission_str: &str) -> Option<Mission> {
         match mission_str.to_lowercase().as_str() {
@@ -42,19 +48,18 @@ impl Mission {
 
 impl Entity {
     pub fn new_bot(
-        x: u32,
-        y: u32,
-        mission_str: &str,
+        loc: Localization,
+        nature: Nature,
         id_generator: &mut IDGenerator
     ) -> Option<Self> {
-        if let Some(mission) = Mission::from_str(mission_str) {
-            let id = id_generator.generate_id();
-            let loc = Localization { x, y };
-            let nature = Nature::Bot { mission };
-            let display = if mission_str == "scout" { 'S' } else { 'R' };
-            Some(Self { id, loc, nature, display })
-        } else {
-            None
-        }
+        let id = id_generator.generate_id();
+        let display = match nature {
+            Nature::Bot { ref mission } => match mission {
+                Mission::Scout => 'S',
+                Mission::Gatherer => 'G',
+            },
+            _ => return None,
+        };
+        Some(Self { id, loc, nature, display })
     }
 }
