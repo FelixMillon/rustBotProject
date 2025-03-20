@@ -5,7 +5,7 @@ use std::f64;
 
 use crate::id_generator::IDGenerator;
 use crate::entities::*;
-
+use crate::events::*;
 
 pub struct Map {
     pub cols: u32,
@@ -35,8 +35,7 @@ impl Map {
     ){
         if let Some(mission) = Mission::from_str(mission_str) {
             let loc = Localization { x, y };
-            let nature = Nature::Bot { mission };
-            if let Some(entity) = Entity::new_bot(loc, nature, id_generator) {
+            if let Some(entity) = Entity::new_bot(loc, mission, id_generator) {
                 self.entities.insert(entity.id, entity);
             }
         } else {
@@ -44,6 +43,13 @@ impl Map {
         }
     }
 
+    pub fn handle_event(&mut self, event: EventType) {
+        for entity in self.entities.values_mut() {
+            if let Nature::Bot(bot) = &mut entity.nature {
+                bot.on_event(&event);
+            }
+        }
+    }
     pub fn generate_display(&mut self) -> Vec<Vec<char>>{
         let mut result_map = self.map_matrix.clone();
         for (_, entity) in &self.entities {

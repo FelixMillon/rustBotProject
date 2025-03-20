@@ -1,4 +1,5 @@
 use crate::id_generator::IDGenerator;
+use crate::events::*;
 
 pub struct Localization {
     pub x: u32,
@@ -23,8 +24,8 @@ pub struct Bot {
 }
 
 pub enum Nature {
-    Bot { mission: Mission},
-    Resource { available: u16, consumed: u16},
+    Bot(Bot),
+    Resource(Resource),
 }
 
 pub enum Mission {
@@ -35,6 +36,18 @@ pub enum Mission {
 pub enum ResourceKind {
     Crystal,
     Energy
+}
+pub trait BotActions {
+    fn move_to(&self);
+}
+
+impl BotActions for Bot {
+    fn move_to(&self) {
+        match self.mission {
+            Mission::Scout => println!("J'explore."),
+            Mission::Gatherer => println!("Je ramasse"),
+        }
+    }
 }
 impl Mission {
     pub fn from_str(mission_str: &str) -> Option<Mission> {
@@ -49,17 +62,30 @@ impl Mission {
 impl Entity {
     pub fn new_bot(
         loc: Localization,
-        nature: Nature,
-        id_generator: &mut IDGenerator
+        mission: Mission,
+        id_generator: &mut IDGenerator,
     ) -> Option<Self> {
         let id = id_generator.generate_id();
-        let display = match nature {
-            Nature::Bot { ref mission } => match mission {
-                Mission::Scout => 'S',
-                Mission::Gatherer => 'G',
-            },
-            _ => return None,
+        let display = match mission {
+            Mission::Scout => 'S',
+            Mission::Gatherer => 'G',
         };
-        Some(Self { id, loc, nature, display })
+
+        Some(
+            Self {
+                id,
+                loc,
+                nature: Nature::Bot(Bot { mission }),
+                display,
+            }
+        )
+    }
+}
+
+impl Bot {
+    pub fn on_event(&mut self, event: &EventType) {
+        match event {
+            EventType::Tick => self.move_to(),
+        }
     }
 }
