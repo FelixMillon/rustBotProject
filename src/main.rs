@@ -22,8 +22,8 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     let mut map = Map::new(20, 40, 43);
     map.generate_map_obstacles();
-    map.add_bot(3,3,"scout",&mut id_generator);  // TEST TO DELETE
-    map.add_bot(4,6,"scout",&mut id_generator);  // TEST TO DELETE
+    map.add_bot(9,21,"scout",&mut id_generator);  // TEST TO DELETE
+    map.add_bot(11,19,"scout",&mut id_generator);  // TEST TO DELETE
     terminal.clear().unwrap();
 
     terminal.draw(|f| {
@@ -35,7 +35,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             for (j, &cell) in row.iter().enumerate() {
                 let x = j as u16;
                 let y = i as u16;
-                let text = Text::from(Span::raw(cell.to_string()));
+                let text = Text::from(Span::raw(cell.display.to_string()));
                 f.render_widget(Paragraph::new(text), Rect::new(x, y, 1, 1));
             }
         }
@@ -55,8 +55,25 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                                 for (j, &cell) in row.iter().enumerate() {
                                     let x = j as u16;
                                     let y = i as u16;
-                                    let text = Text::from(Span::raw(cell.to_string()));
-                                    f.render_widget(Paragraph::new(text), Rect::new(x, y, 1, 1));
+                                    let explore_value = map.map_matrix[i][j].explore;
+                                    let mut gray_value = 0 as u8;
+                                    if explore_value < 0 {
+                                        gray_value = 0 as u8;
+                                    }else if explore_value > 30{
+                                        gray_value = 30 as u8;
+                                    }else{
+                                        gray_value = explore_value as u8;
+                                    }
+                                    gray_value = gray_value * 8;
+                                    let color = Color::Rgb(gray_value, gray_value, gray_value);
+
+                                    let cell_style = Style::default().fg(color);
+
+                                    let text = Text::from(Span::raw(cell.display.to_string()));
+                                    f.render_widget(
+                                        Paragraph::new(text).style(cell_style),
+                                        Rect::new(x, y, 1, 1),
+                                    );
                                 }
                             }
                         }).unwrap();

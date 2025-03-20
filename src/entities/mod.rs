@@ -1,5 +1,8 @@
+use rand::prelude::*;
+
 use crate::id_generator::IDGenerator;
 use crate::events::*;
+use crate::map::*;
 
 pub struct Localization {
     pub x: u32,
@@ -38,14 +41,36 @@ pub enum ResourceKind {
     Energy
 }
 pub trait BotActions {
-    fn move_to(&self);
+    fn move_to(&mut self, map_matrix: &Vec<Vec<Cell>>, rows: u32, cols: u32, seed: u64);
 }
 
-impl BotActions for Bot {
-    fn move_to(&self) {
-        match self.mission {
-            Mission::Scout => println!("J'explore."),
-            Mission::Gatherer => println!("Je ramasse"),
+impl BotActions for Entity {
+    fn move_to(&mut self, map_matrix: &Vec<Vec<Cell>>, rows: u32, cols: u32, seed: u64) {
+        if let Nature::Bot(bot) = &mut self.nature {
+            let mut rng = StdRng::seed_from_u64(seed.wrapping_add(self.id as u64));
+
+            let directions = [(1, 0), (-1, 0), (0, 1), (0, -1)];
+
+            loop {
+                let mut shuffled_directions = directions;
+                shuffled_directions.shuffle(&mut rng);
+
+                for &(delta_x, delta_y) in &shuffled_directions {
+                    let new_x = self.loc.x as i32 + delta_x;
+                    let new_y = self.loc.y as i32 + delta_y;
+
+                    if new_x >= 0 && new_x < rows as i32 && new_y >= 0 && new_y < cols as i32 {
+                        let new_x = new_x as u32;
+                        let new_y = new_y as u32;
+
+                        if map_matrix[new_x as usize][new_y as usize].display != '8' {
+                            self.loc.x = new_x;
+                            self.loc.y = new_y;
+                            return;
+                        }
+                    }
+                }
+            }
         }
     }
 }
@@ -79,13 +104,5 @@ impl Entity {
                 display,
             }
         )
-    }
-}
-
-impl Bot {
-    pub fn on_event(&mut self, event: &EventType) {
-        match event {
-            EventType::Tick => self.move_to(),
-        }
     }
 }
