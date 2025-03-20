@@ -115,7 +115,7 @@ impl Map {
             let cols = self.cols;
             for id in bot_ids {
                 if let Some(entity) = self.entities.get_mut(&id) {
-                    entity.move_to(map_matrix, rows, cols, seed);
+                    entity.explore(map_matrix, rows, cols, seed);
                 }
             }
             self.decay_passage_counters();

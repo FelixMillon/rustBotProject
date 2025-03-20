@@ -20,8 +20,15 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let backend = CrosstermBackend::new(stdout);
     let mut terminal = Terminal::new(backend)?;
 
-    let mut map = Map::new(20, 40, 43);
+    let mut map = Map::new(20, 40, 44);
     map.generate_map_obstacles();
+    map.add_bot(10,20,"scout",&mut id_generator);
+    map.add_bot(10,20,"scout",&mut id_generator);
+    map.add_bot(10,20,"scout",&mut id_generator);
+    map.add_bot(10,20,"scout",&mut id_generator);
+    map.add_bot(10,20,"scout",&mut id_generator);
+    map.add_bot(10,20,"scout",&mut id_generator);
+    map.add_bot(10,20,"scout",&mut id_generator);
     map.add_bot(9,21,"scout",&mut id_generator);  // TEST TO DELETE
     map.add_bot(11,19,"scout",&mut id_generator);  // TEST TO DELETE
     terminal.clear().unwrap();
