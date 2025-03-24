@@ -7,7 +7,8 @@ use crossterm::{
 };
 use std::io::{self, stdout};
 mod map;
-mod entities;
+mod robots;
+mod resources;
 mod id_generator;
 mod events;
 use events::EventType;
@@ -22,6 +23,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     let mut map = Map::new(20, 40, 44);
     map.generate_map_obstacles();
+    map.generate_resources(&mut id_generator, 10);
     map.add_bot(10,20,"scout",&mut id_generator);
     map.add_bot(10,20,"scout",&mut id_generator);
     map.add_bot(10,20,"scout",&mut id_generator);
@@ -72,8 +74,22 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                                         gray_value = explore_value as u8;
                                     }
                                     gray_value = gray_value * 8;
-                                    let color = Color::Rgb(gray_value, gray_value, gray_value);
-
+                                    let mut color = Color::Rgb(gray_value, gray_value, gray_value);
+                                    match cell.display {
+                                        'C' => {
+                                            color = Color::Rgb(0, gray_value, gray_value);
+                                        }
+                                        'E' => {
+                                            color = Color::Rgb(gray_value, gray_value, 0);
+                                        }
+                                        'S' => {
+                                            color = Color::Rgb(0,155, 0);
+                                        }
+                                        'G' => {
+                                            color = Color::Rgb(255,0, 0);
+                                        }
+                                        _ => {}
+                                    }
                                     let cell_style = Style::default().fg(color);
 
                                     let text = Text::from(Span::raw(cell.display.to_string()));
