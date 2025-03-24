@@ -14,7 +14,7 @@ pub struct Localization {
 pub struct Entity {
     pub id: u32,
     pub loc: Localization,
-    pub prev_loc: Localization,
+    pub prev_loc: Option<Localization>,
     pub nature: Nature,
     pub display: char,
 }
@@ -43,79 +43,119 @@ pub enum ResourceKind {
     Crystal,
     Energy
 }
-pub trait BotActions {
+
+pub trait ScoutActions {
     fn explore(&mut self, map_matrix: &Vec<Vec<Cell>>, rows: u32, cols: u32, seed: u64);
+    fn try_move_to_best_cell(&mut self, circle_cells: &Vec<(i32, i32)>, map_matrix: &Vec<Vec<Cell>>, rows: u32, cols: u32, rng: &mut StdRng) -> bool;
+    fn try_move_to_any_cell(&mut self, circle_cells: &Vec<(i32, i32)>, map_matrix: &Vec<Vec<Cell>>, rows: u32, cols: u32, rng: &mut StdRng) -> bool;
+    fn attempt_movement(&mut self, cells: &mut Vec<(i32, i32)>, map_matrix: &Vec<Vec<Cell>>, rows: u32, cols: u32, rng: &mut StdRng) -> bool;
+    fn swap_with_previous_location(&mut self);
 }
 
-impl BotActions for Entity {
-    fn explore(&mut self, map_matrix: &Vec<Vec<Cell>>, rows: u32, cols: u32, seed: u64) {
-        if let Nature::Bot(bot) = &mut self.nature {
-            let mut rng = StdRng::seed_from_u64(seed.wrapping_add(self.id.pow(5) as u64 * 31 + self.loc.x as u64 * 17 + self.loc.y as u64 * 13));
+pub trait BotActions: ScoutActions {
+    fn move_to(&mut self, x: u32, y: u32);
+}
 
+impl ScoutActions for Entity {
+    fn explore(&mut self, map_matrix: &Vec<Vec<Cell>>, rows: u32, cols: u32, seed: u64) {
+        if let Nature::Bot(_) = &mut self.nature {
+            let mut rng = self.initialize_rng(seed);
             let circle_cells = get_circle_cells(self.loc.x as i32, self.loc.y as i32, rows as i32, cols as i32);
-    
-            let min_explore = circle_cells.iter()
-                .map(|&(i, j)| map_matrix[i as usize][j as usize].explore)
-                .min()
-                .unwrap_or(i8::MAX);
-    
-            let mut best_cells: Vec<(i32, i32)> = circle_cells.clone().into_iter()
-                .filter(|&(i, j)| map_matrix[i as usize][j as usize].explore == min_explore)
-                .collect();
-    
-            while !best_cells.is_empty() {
-                if let Some(&(target_x, target_y)) = best_cells.choose(&mut rng) {
-                    if let Some(path) = find_shortest_path(
-                        (self.loc.x as i32, self.loc.y as i32),
-                        (target_x, target_y),
-                        map_matrix,
-                        rows,
-                        cols
-                    ) {
-                        for &(step_x, step_y) in &path {
-                            if map_matrix[step_x as usize][step_y as usize].display != '8' {
-                                self.prev_loc.x = self.loc.x;
-                                self.prev_loc.y = self.loc.y;
-                                self.loc.x = step_x as u32;
-                                self.loc.y = step_y as u32;
-                                return;
-                            }
-                        }
-                    }
-                    best_cells.retain(|&(x, y)| !(x == target_x && y == target_y));
-                }
-            }
-    
-            let mut retry_cells = circle_cells.clone().into_iter().collect::<Vec<(i32, i32)>>();
             
-    
-            while !retry_cells.is_empty() {
-                if let Some(&(target_x, target_y)) = retry_cells.choose(&mut rng) {
-                    if let Some(path) = find_shortest_path(
-                        (self.loc.x as i32, self.loc.y as i32),
-                        (target_x, target_y),
-                        map_matrix,
-                        rows,
-                        cols
-                    ) {
-                        for &(step_x, step_y) in &path {
-                            if map_matrix[step_x as usize][step_y as usize].display != '8' {
-                                self.prev_loc.x = self.loc.x;
-                                self.prev_loc.y = self.loc.y;
-                                self.loc.x = step_x as u32;
-                                self.loc.y = step_y as u32;
-                                return;
-                            }
+            if self.try_move_to_best_cell(&circle_cells, map_matrix, rows, cols, &mut rng) {
+                return;
+            }
+            
+            if self.try_move_to_any_cell(&circle_cells, map_matrix, rows, cols, &mut rng) {
+                return;
+            }
+            
+            self.swap_with_previous_location();
+        }
+    }
+    fn try_move_to_best_cell(
+        &mut self,
+        circle_cells: &Vec<(i32, i32)>,
+        map_matrix: &Vec<Vec<Cell>>,
+        rows: u32,
+        cols: u32,
+        rng: &mut StdRng
+    ) -> bool {
+        let min_explore = circle_cells.iter()
+            .filter(|&&(i, j)| map_matrix[i as usize][j as usize].display != '8')
+            .map(|&(i, j)| map_matrix[i as usize][j as usize].explore)
+            .min()
+            .unwrap_or(i8::MAX);
+
+        let mut best_cells: Vec<(i32, i32)> = circle_cells.iter()
+            .cloned()
+            .filter(|&(i, j)| map_matrix[i as usize][j as usize].explore == min_explore && map_matrix[i as usize][j as usize].display != '8')
+            .collect();
+
+        self.attempt_movement(&mut best_cells, map_matrix, rows, cols, rng)
+    }
+
+    fn try_move_to_any_cell(
+        &mut self,
+        circle_cells: &Vec<(i32, i32)>,
+        map_matrix: &Vec<Vec<Cell>>,
+        rows: u32,
+        cols: u32,
+        rng: &mut StdRng,
+    ) -> bool {
+        let mut retry_cells: Vec<(i32, i32)> = circle_cells.iter()
+            .cloned()
+            .filter(|&(i, j)| map_matrix[i as usize][j as usize].display != '8')
+            .collect();
+        
+        self.attempt_movement(&mut retry_cells, map_matrix, rows, cols, rng)
+    }
+
+    fn attempt_movement(
+        &mut self,
+        cells: &mut Vec<(i32, i32)>,
+        map_matrix: &Vec<Vec<Cell>>,
+        rows: u32,
+        cols: u32,
+        rng: &mut StdRng,
+    ) -> bool {
+        while !cells.is_empty() {
+            if let Some(&(target_x, target_y)) = cells.choose(rng) {
+                if let Some(path) = find_shortest_path(
+                    (self.loc.x as i32, self.loc.y as i32),
+                    (target_x, target_y),
+                    map_matrix,
+                    rows,
+                    cols,
+                ) {
+                    for &(step_x, step_y) in &path {
+                        if map_matrix[step_x as usize][step_y as usize].display != '8' {
+                            self.move_to(step_x as u32, step_y as u32);
+                            return true;
                         }
                     }
-                    retry_cells.retain(|&(x, y)| !(x == target_x && y == target_y));
                 }
+                cells.retain(|&(x, y)| !(x == target_x && y == target_y));
             }
-            let prev = self.prev_loc;
-            self.prev_loc = self.loc; 
+        }
+        false
+    }
+
+    fn swap_with_previous_location(&mut self) {
+        if let Some(prev) = self.prev_loc {
+            self.prev_loc = Some(self.loc);
             self.loc = prev;
         }
     }
+}
+
+impl BotActions for Entity {
+    fn move_to(&mut self, x: u32, y: u32) {
+        self.prev_loc = Some(self.loc);
+        self.loc.x = x;
+        self.loc.y = y;
+    }
+
 }
 impl Mission {
     pub fn from_str(mission_str: &str) -> Option<Mission> {
@@ -143,12 +183,20 @@ impl Entity {
             Self {
                 id,
                 loc,
-                prev_loc: loc,
+                prev_loc: Some(loc),
                 nature: Nature::Bot(Bot { mission }),
                 display,
             }
         )
     }
+
+    fn initialize_rng(&self, seed: u64) -> StdRng {
+        StdRng::seed_from_u64(seed.wrapping_add(
+            self.id.pow(5) as u64 * 31 + self.loc.x as u64 * 17 + self.loc.y as u64 * 13
+        ))
+    }
+
+
 }
 fn get_circle_cells(x: i32, y: i32, rows: i32, cols: i32) -> Vec<(i32, i32)> {
     let mut cells = Vec::new();
