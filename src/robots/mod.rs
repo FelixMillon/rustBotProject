@@ -5,43 +5,26 @@ use crate::id_generator::IDGenerator;
 use crate::events::*;
 use crate::map::*;
 
-#[derive(Debug, Clone, Copy)]
-pub struct Localization {
-    pub x: u32,
-    pub y: u32,
-}
-
-pub struct Entity {
+pub struct Robot {
     pub id: u32,
     pub loc: Localization,
-    pub prev_loc: Option<Localization>,
-    pub nature: Nature,
     pub display: char,
-}
-
-pub struct Resource {
-    pub kind: ResourceKind,
-    pub available : u16,
-    pub consumed: u16,
-}
-
-pub struct Bot {
     pub mission: Mission,
-}
-
-pub enum Nature {
-    Bot(Bot),
-    Resource(Resource),
+    pub prev_loc: Localization,
 }
 
 pub enum Mission {
     Scout,
-    Gatherer
+    Gatherer,
 }
-
-pub enum ResourceKind {
-    Crystal,
-    Energy
+impl Mission {
+    pub fn from_str(mission_str: &str) -> Option<Mission> {
+        match mission_str.to_lowercase().as_str() {
+            "scout" => Some(Mission::Scout),
+            "gatherer" => Some(Mission::Gatherer),
+            _ => None,
+        }
+    }
 }
 
 pub trait ScoutActions {
@@ -56,22 +39,21 @@ pub trait BotActions: ScoutActions {
     fn move_to(&mut self, x: u32, y: u32);
 }
 
-impl ScoutActions for Entity {
+impl ScoutActions for Robot {
     fn explore(&mut self, map_matrix: &Vec<Vec<Cell>>, rows: u32, cols: u32, seed: u64) {
-        if let Nature::Bot(_) = &mut self.nature {
-            let mut rng = self.initialize_rng(seed);
-            let circle_cells = get_circle_cells(self.loc.x as i32, self.loc.y as i32, rows as i32, cols as i32);
-            
-            if self.try_move_to_best_cell(&circle_cells, map_matrix, rows, cols, &mut rng) {
-                return;
-            }
-            
-            if self.try_move_to_any_cell(&circle_cells, map_matrix, rows, cols, &mut rng) {
-                return;
-            }
-            
-            self.swap_with_previous_location();
+
+        let mut rng = self.initialize_rng(seed);
+        let circle_cells = get_circle_cells(self.loc.x as i32, self.loc.y as i32, rows as i32, cols as i32);
+        
+        if self.try_move_to_best_cell(&circle_cells, map_matrix, rows, cols, &mut rng) {
+            return;
         }
+
+        if self.try_move_to_any_cell(&circle_cells, map_matrix, rows, cols, &mut rng) {
+            return;
+        }
+        self.swap_with_previous_location();
+
     }
     fn try_move_to_best_cell(
         &mut self,
@@ -142,32 +124,21 @@ impl ScoutActions for Entity {
     }
 
     fn swap_with_previous_location(&mut self) {
-        if let Some(prev) = self.prev_loc {
-            self.prev_loc = Some(self.loc);
-            self.loc = prev;
-        }
+        let prev = self.prev_loc;
+        self.prev_loc = self.loc;
+        self.loc = prev;
     }
 }
 
-impl BotActions for Entity {
+impl BotActions for Robot {
     fn move_to(&mut self, x: u32, y: u32) {
-        self.prev_loc = Some(self.loc);
+        self.prev_loc = self.loc;
         self.loc.x = x;
         self.loc.y = y;
     }
-
-}
-impl Mission {
-    pub fn from_str(mission_str: &str) -> Option<Mission> {
-        match mission_str.to_lowercase().as_str() {
-            "scout" => Some(Mission::Scout),
-            "gatherer" => Some(Mission::Gatherer),
-            _ => None,
-        }
-    }
 }
 
-impl Entity {
+impl Robot {
     pub fn new_bot(
         loc: Localization,
         mission: Mission,
@@ -183,13 +154,13 @@ impl Entity {
             Self {
                 id,
                 loc,
-                prev_loc: Some(loc),
-                nature: Nature::Bot(Bot { mission }),
+                prev_loc: loc,
+                mission,
                 display,
             }
         )
     }
-
+   
     fn initialize_rng(&self, seed: u64) -> StdRng {
         StdRng::seed_from_u64(seed.wrapping_add(
             self.id.pow(5) as u64 * 31 + self.loc.x as u64 * 17 + self.loc.y as u64 * 13
