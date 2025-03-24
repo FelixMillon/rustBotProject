@@ -13,7 +13,8 @@ pub struct Map {
     pub rows: u32,
     pub seed: u64,
     pub robots: HashMap<u32, Robot>,
-    pub resources: HashMap<u32, Resource>,  
+    pub resources: HashMap<u32, Resource>,
+    pub finded_resources: Vec<u32>,  
     pub map_matrix: Vec<Vec<Cell>>,
     pub age: u32
 }
@@ -35,6 +36,7 @@ impl Map {
         let robots = HashMap::new();
         let resources = HashMap::new();
         let mut map_matrix = Vec::new();
+        let finded_resources = Vec::new();
         for _ in 0..rows {
             let mut row = Vec::new();
             for _ in 0..cols {
@@ -48,6 +50,7 @@ impl Map {
             seed,
             robots,
             resources,
+            finded_resources,
             map_matrix: map_matrix,
             age: 0,
         }
@@ -127,6 +130,11 @@ impl Map {
     
                         if dx >= 0 && dx < self.rows as i32 && dy >= 0 && dy < self.cols as i32 {
                             self.map_matrix[dx as usize][dy as usize].explore = 30;
+                            if let Some(resource) = self.find_resource_by_loc(dx as u32, dy as u32) {
+                                if !self.finded_resources.contains(&resource.id) {
+                                    self.finded_resources.push(resource.id);
+                                }
+                            }
                         }
                     }
                 }

@@ -14,6 +14,7 @@ pub struct Resource {
     pub remaining_quantity: u16,
 }
 
+#[derive(Debug, Clone, Copy)]
 pub enum ResourceKind {
     Crystal,
     Energy,
@@ -38,11 +39,11 @@ impl ResourceKind {
 
 // pub trait ResourceOperations: CrystalOperations + EnergyOperations {
 pub trait ResourceOperations {
-    fn gather(&mut self, qt: u16, gatherer_rate: f32);
+    fn gather(&mut self, qt: u16, gatherer_rate: f32) -> u16 ;
 }
 
 impl ResourceOperations for Resource {
-    fn gather(&mut self, qt: u16, gatherer_rate: f32) {
+    fn gather(&mut self, qt: u16, gatherer_rate: f32) -> u16 {
         let max_extractable = (qt as f32 * gatherer_rate).round() as u16;
         let extracted = if self.remaining_quantity < max_extractable {
             let extracted = self.remaining_quantity;
