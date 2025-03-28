@@ -33,6 +33,9 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     map.add_bot(10,20,"scout",&mut id_generator);
     map.add_bot(9,21,"scout",&mut id_generator);  // TEST TO DELETE
     map.add_bot(11,19,"scout",&mut id_generator);  // TEST TO DELETE
+    map.add_bot(10,20,"gatherer",&mut id_generator);
+    map.add_bot(10,20,"gatherer",&mut id_generator);
+    map.add_bot(10,20,"gatherer",&mut id_generator);
     terminal.clear().unwrap();
 
     terminal.draw(|f| {
@@ -77,10 +80,10 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                                     let mut color = Color::Rgb(gray_value, gray_value, gray_value);
                                     match cell.display {
                                         'C' => {
-                                            color = Color::Rgb(0, gray_value, gray_value);
+                                            color = Color::Rgb(0, 255, 255);
                                         }
                                         'E' => {
-                                            color = Color::Rgb(gray_value, gray_value, 0);
+                                            color = Color::Rgb(255, 255, 0);
                                         }
                                         'S' => {
                                             color = Color::Rgb(0,155, 0);
@@ -99,6 +102,23 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                                     );
                                 }
                             }
+                        }).unwrap();
+                    }
+                    KeyCode::Char('p') => {
+                        terminal.draw(|f| {
+                            let size = f.size();
+                            let block = Block::default().borders(Borders::ALL).title("Base Resources");
+                            f.render_widget(block, size);
+
+                            let crystal_count = map.base.crystal;
+                            let energy_count = map.base.energy;
+                            let resources_text = format!(
+                                "Crystal: {} :: Energy: {}",
+                                crystal_count, energy_count
+                            );
+
+                            let text = Text::from(Span::raw(resources_text));
+                            f.render_widget(Paragraph::new(text), Rect::new(1, 1, size.width - 2, size.height - 2));
                         }).unwrap();
                     }
                     KeyCode::Esc | KeyCode::Char('q') => {
