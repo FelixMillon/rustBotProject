@@ -16,13 +16,26 @@ pub struct Map {
     pub resources: HashMap<u32, Resource>,
     pub finded_resources: Vec<u32>,  
     pub map_matrix: Vec<Vec<Cell>>,
-    pub age: u32
+    pub age: u32,
+    pub base: Base,
+}
+
+#[derive(Debug, Clone, Copy)]
+pub struct Base {
+    pub loc: Localization,
+    pub crystal: u16,
+    pub energy: u16,
 }
 
 #[derive(Debug, Clone, Copy)]
 pub struct Localization {
     pub x: u32,
     pub y: u32,
+}
+impl Localization {
+    pub fn same_loc(&self, other: &Localization) -> bool {
+        self.x == other.x && self.y == other.y
+    }
 }
 
 #[derive(Debug, Clone, Copy)]
@@ -31,6 +44,16 @@ pub struct Cell {
     pub explore: i8,
 }
 
+impl Base{
+    pub fn new(rows: u32, cols: u32) -> Self {
+        let loc = Localization{x: ((rows + 1) / 2), y: ((cols + 1) / 2)};
+        Self {
+            loc,
+            crystal: 0,
+            energy: 0,
+        }
+    }
+}
 impl Map {
     pub fn new(rows: u32, cols: u32, seed: u64) -> Self {
         let robots = HashMap::new();
@@ -53,8 +76,10 @@ impl Map {
             finded_resources,
             map_matrix: map_matrix,
             age: 0,
+            base: Base::new(rows, cols),
         }
     }
+
     pub fn add_bot(
         &mut self,
         x: u32,
@@ -179,15 +204,22 @@ impl Map {
     
             let seed = self.seed;
             let map_matrix = &self.map_matrix;
+            let finded_resources = &self.finded_resources;
+            let resources = &mut self.resources;    
             let rows = self.rows;
             let cols = self.cols;
-    
+            let base = &mut self.base;
             for id in bot_ids {
                 if let Some(robot) = self.robots.get_mut(&id) {
-                    robot.explore(map_matrix, rows, cols, seed);
+                    if let Mission::Scout = robot.mission {
+                        robot.explore(map_matrix, rows, cols, seed);
+                    }
+                    if let Mission::Gatherer = robot.mission {
+                        robot.choose(finded_resources, resources, seed, map_matrix, base);
+                    }
                 }
             }
-    
+            self.clear_empty_resources();
             self.decay_passage_counters();
             self.update_explore_matrix();
         }
@@ -232,10 +264,26 @@ impl Map {
     pub fn generate_resources(&mut self, id_generator: &mut IDGenerator, number: u8) {
         for i in 0..number {
             if i % 2 == 0 {
-                self.add_resource("crystal", 100, id_generator);
+                self.add_resource("crystal", 40, id_generator);
             } else {
-                self.add_resource("energy", 100, id_generator);
+                self.add_resource("energy", 40, id_generator);
             }
+        }
+    }
+
+    fn clear_empty_resources(&mut self) {
+        let ids_to_remove: Vec<u32> = self.resources.iter()
+            .filter_map(|(id, resource)| {
+                if resource.remaining_quantity == 0 {
+                    Some(*id)
+                } else {
+                    None
+                }
+            })
+            .collect();
+        for id in ids_to_remove.iter() {
+            self.resources.remove(id);
+            self.finded_resources.retain(|&resource_id| resource_id != *id);
         }
     }
 

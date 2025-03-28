@@ -5,6 +5,7 @@ use crate::id_generator::IDGenerator;
 use crate::events::*;
 use crate::map::*;
 
+#[derive(Debug, Clone, Copy)]
 pub struct Resource {
     pub id: u32,
     pub loc: Localization,
@@ -39,11 +40,12 @@ impl ResourceKind {
 
 // pub trait ResourceOperations: CrystalOperations + EnergyOperations {
 pub trait ResourceOperations {
-    fn gather(&mut self, qt: u16, gatherer_rate: f32) -> u16 ;
+    fn calculate_gather(&mut self, qt: u16, gatherer_rate: f32) -> u16 ;
+    fn gather(&mut self, qt: u16, gatherer_rate: f32) -> (u16,u16) ;
 }
 
 impl ResourceOperations for Resource {
-    fn gather(&mut self, qt: u16, gatherer_rate: f32) -> u16 {
+    fn calculate_gather(&mut self, qt: u16, gatherer_rate: f32) -> u16 {
         let max_extractable = (qt as f32 * gatherer_rate).round() as u16;
         let extracted = if self.remaining_quantity < max_extractable {
             let extracted = self.remaining_quantity;
@@ -54,6 +56,14 @@ impl ResourceOperations for Resource {
             max_extractable
         };
         extracted
+    }
+    fn gather(&mut self, qt: u16, gatherer_rate: f32) -> (u16, u16) {
+        let qty = self.calculate_gather(qt, gatherer_rate);
+    
+        match self.kind {
+            ResourceKind::Crystal => (qty, 0),
+            ResourceKind::Energy => (0, qty),
+        }
     }
 }
 
