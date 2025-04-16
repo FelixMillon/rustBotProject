@@ -4,7 +4,8 @@ use rand::prelude::*;
 use std::f64;
 
 use crate::id_generator::IDGenerator;
-use crate::robots::*;
+use crate::gatherers::*;
+use crate::scouts::*;
 use crate::resources::*;
 use crate::events::*;
 
@@ -12,7 +13,8 @@ pub struct Map {
     pub cols: u32,
     pub rows: u32,
     pub seed: u64,
-    pub robots: HashMap<u32, Robot>,
+    pub scouts: HashMap<u32, Scout>,
+    pub gatherers: HashMap<u32, Gatherer>,
     pub resources: HashMap<u32, Resource>,
     pub finded_resources: Vec<u32>,  
     pub map_matrix: Vec<Vec<Cell>>,
@@ -44,7 +46,7 @@ pub struct Cell {
     pub explore: i8,
 }
 
-impl Base{
+impl Base {
     pub fn new(rows: u32, cols: u32) -> Self {
         let loc = Localization{x: ((rows + 1) / 2), y: ((cols + 1) / 2)};
         Self {
@@ -54,9 +56,11 @@ impl Base{
         }
     }
 }
+
 impl Map {
     pub fn new(rows: u32, cols: u32, seed: u64) -> Self {
-        let robots = HashMap::new();
+        let scouts = HashMap::new();
+        let gatherers = HashMap::new();
         let resources = HashMap::new();
         let mut map_matrix = Vec::new();
         let finded_resources = Vec::new();
@@ -71,29 +75,37 @@ impl Map {
             rows,
             cols,
             seed,
-            robots,
+            scouts,
+            gatherers,
             resources,
             finded_resources,
-            map_matrix: map_matrix,
+            map_matrix,
             age: 0,
             base: Base::new(rows, cols),
         }
     }
 
-    pub fn add_bot(
+    pub fn add_scout(
         &mut self,
         x: u32,
         y: u32,
-        mission_str: &str,
         id_generator: &mut IDGenerator
-    ){
-        if let Some(mission) = Mission::from_str(mission_str) {
-            let loc = Localization { x, y };
-            if let Some(robot) = Robot::new_bot(loc, mission, id_generator) {
-                self.robots.insert(robot.id, robot);
-            }
-        } else {
-            eprintln!("Unknown mission : {}", mission_str);
+    ) {
+        let loc = Localization{ x, y };
+        if let Some(scout) = Scout::new(loc, id_generator) {
+            self.scouts.insert(scout.id, scout);
+        }
+    }
+
+    pub fn add_gatherer(
+        &mut self,
+        x: u32,
+        y: u32,
+        id_generator: &mut IDGenerator
+    ) {
+        let loc = Localization{ x, y };
+        if let Some(gatherer) = Gatherer::new(loc, id_generator) {
+            self.gatherers.insert(gatherer.id, gatherer);
         }
     }
 
@@ -102,9 +114,8 @@ impl Map {
         resource_kind_str: &str,
         initial_quantity: u16,
         id_generator: &mut IDGenerator
-    ){
+    ) {
         if let Some(kind) = ResourceKind::from_str(resource_kind_str) {
-            
             let loc = self.find_free_localization();
             if let Some(resource) = Resource::new_resource(loc, kind, initial_quantity, id_generator) {
                 self.resources.insert(resource.id, resource);
@@ -144,21 +155,19 @@ impl Map {
     }
 
     pub fn update_explore_matrix(&mut self) {
-        for robot in self.robots.values() {
-            if let Mission::Scout = robot.mission {
-                let x = robot.loc.x as i32;
-                let y = robot.loc.y as i32;
-                for delta_x in -1..=1 {
-                    for delta_y in -1..=1 {
-                        let dx = x + delta_x;
-                        let dy = y + delta_y;
-    
-                        if dx >= 0 && dx < self.rows as i32 && dy >= 0 && dy < self.cols as i32 {
-                            self.map_matrix[dx as usize][dy as usize].explore = 30;
-                            if let Some(resource) = self.find_resource_by_loc(dx as u32, dy as u32) {
-                                if !self.finded_resources.contains(&resource.id) {
-                                    self.finded_resources.push(resource.id);
-                                }
+        for scout in self.scouts.values() {
+            let x = scout.loc.x as i32;
+            let y = scout.loc.y as i32;
+            for delta_x in -1..=1 {
+                for delta_y in -1..=1 {
+                    let dx = x + delta_x;
+                    let dy = y + delta_y;
+
+                    if dx >= 0 && dx < self.rows as i32 && dy >= 0 && dy < self.cols as i32 {
+                        self.map_matrix[dx as usize][dy as usize].explore = 30;
+                        if let Some(resource) = self.find_resource_by_loc(dx as u32, dy as u32) {
+                            if !self.finded_resources.contains(&resource.id) {
+                                self.finded_resources.push(resource.id);
                             }
                         }
                     }
@@ -167,7 +176,7 @@ impl Map {
         }
     }
 
-    fn decay_passage_counters(&mut self) {
+    pub fn decay_passage_counters(&mut self) {
         let center_x = self.rows / 2;
         let center_y = self.cols / 2;
     
@@ -199,9 +208,10 @@ impl Map {
     pub fn handle_event(&mut self, event: EventType) {
         if let EventType::Tick = event {
             self.age += 1;
-            
-            let bot_ids: Vec<u32> = self.robots.keys().cloned().collect();
-    
+
+            let scout_ids: Vec<u32> = self.scouts.keys().cloned().collect();
+            let gatherer_ids: Vec<u32> = self.gatherers.keys().cloned().collect();
+
             let seed = self.seed;
             let map_matrix = &self.map_matrix;
             let finded_resources = &self.finded_resources;
@@ -209,18 +219,26 @@ impl Map {
             let rows = self.rows;
             let cols = self.cols;
             let base = &mut self.base;
-            for id in bot_ids {
-                if let Some(robot) = self.robots.get_mut(&id) {
-                    if let Mission::Scout = robot.mission {
-                        robot.explore(map_matrix, rows, cols, seed);
-                    }
-                    if let Mission::Gatherer = robot.mission {
-                        robot.choose(finded_resources, resources, seed, map_matrix, base);
-                    }
+
+            // Exploration des scouts
+            for id in scout_ids {
+                if let Some(scout) = self.scouts.get_mut(&id){
+                    scout.explore(map_matrix, rows, cols, seed);
                 }
             }
+
+            // Action des gatherers
+            for id in gatherer_ids {
+                if let Some(gatherer) = self.gatherers.get_mut(&id){
+                    gatherer.choose(finded_resources, resources, seed, map_matrix, base);
+                }
+            }
+
+            // Nettoyage des ressources vides
             self.clear_empty_resources();
+            // Décadence des compteurs de passage
             self.decay_passage_counters();
+            // Mise à jour des explorations
             self.update_explore_matrix();
         }
     }
@@ -250,11 +268,18 @@ impl Map {
             }
         }
 
-        for (_, robot) in &self.robots {
-            let x = robot.loc.x as usize;
-            let y = robot.loc.y as usize;
+        for (_, scout) in &self.scouts {
+            let x = scout.loc.x as usize;
+            let y = scout.loc.y as usize;
     
-            let display = robot.display;
+            let display = scout.display;
+            result_map[x][y].display = display;
+        }
+        for (_, gatherer) in &self.gatherers {
+            let x = gatherer.loc.x as usize;
+            let y = gatherer.loc.y as usize;
+    
+            let display = gatherer.display;
             result_map[x][y].display = display;
         }
 

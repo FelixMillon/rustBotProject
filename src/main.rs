@@ -8,7 +8,8 @@ use crossterm::{
 use std::io::{self, stdout};
 use std::time::{Duration, Instant};
 mod map;
-mod robots;
+mod gatherers;
+mod scouts;
 mod resources;
 mod id_generator;
 mod events;
@@ -25,18 +26,18 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let mut map = Map::new(20, 40, 44);
     map.generate_map_obstacles();
     map.generate_resources(&mut id_generator, 10);
-    map.add_bot(10,20,"scout",&mut id_generator);
-    map.add_bot(10,20,"scout",&mut id_generator);
-    map.add_bot(10,20,"scout",&mut id_generator);
-    map.add_bot(10,20,"scout",&mut id_generator);
-    map.add_bot(10,20,"scout",&mut id_generator);
-    map.add_bot(10,20,"scout",&mut id_generator);
-    map.add_bot(10,20,"scout",&mut id_generator);
-    map.add_bot(9,21,"scout",&mut id_generator);  // TEST TO DELETE
-    map.add_bot(11,19,"scout",&mut id_generator);  // TEST TO DELETE
-    map.add_bot(10,20,"gatherer",&mut id_generator);
-    map.add_bot(10,20,"gatherer",&mut id_generator);
-    map.add_bot(10,20,"gatherer",&mut id_generator);
+    map.add_scout(10,20,&mut id_generator);
+    map.add_scout(10,20,&mut id_generator);
+    map.add_scout(10,20,&mut id_generator);
+    map.add_scout(10,20,&mut id_generator);
+    map.add_scout(10,20,&mut id_generator);
+    map.add_scout(10,20,&mut id_generator);
+    map.add_scout(10,20,&mut id_generator);
+    map.add_scout(9,21,&mut id_generator);  // TEST TO DELETE
+    map.add_scout(11,19,&mut id_generator);  // TEST TO DELETE
+    map.add_gatherer(10,20,&mut id_generator);
+    map.add_gatherer(10,20,&mut id_generator);
+    map.add_gatherer(10,20,&mut id_generator);
     terminal.clear().unwrap();
 
     // terminal.draw(|f| {
