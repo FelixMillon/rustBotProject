@@ -3,7 +3,7 @@ use std::collections::{VecDeque, HashMap};
 
 use crate::id_generator::IDGenerator;
 use crate::events::*;
-use crate::map::*;
+use crate::game::*;
 
 #[derive(Debug, Clone, Copy)]
 pub struct Resource {
