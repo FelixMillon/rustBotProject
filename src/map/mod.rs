@@ -21,9 +21,11 @@ pub struct Map {
     pub scouts: HashMap<u32, Scout>,
     pub scout_senders: HashMap<u32, Sender<EventType>>,
     pub scout_receivers: HashMap<u32, Receiver<EventType>>,
+    pub gatherer_senders: HashMap<u32, Sender<EventType>>,
+    pub gatherer_receivers: HashMap<u32, Receiver<EventType>>,
     pub gatherers: HashMap<u32, Gatherer>,
-    pub resources: HashMap<u32, Resource>,
-    pub finded_resources: Vec<u32>,  
+    pub resources: Arc<RwLock<HashMap<u32, Resource>>>,
+    pub finded_resources: Arc<RwLock<Vec<u32>>>,
     pub map_matrix: Arc<RwLock<Vec<Vec<Cell>>>>,
     pub age: u32,
     pub base: Base,
@@ -70,6 +72,8 @@ impl Map {
         let scout_senders = HashMap::new();
         let scout_receivers = HashMap::new();
         let gatherers = HashMap::new();
+        let gatherer_senders = HashMap::new();
+        let gatherer_receivers = HashMap::new();
         let resources = HashMap::new();
         let mut map_matrix = Vec::new();
         let finded_resources = Vec::new();
@@ -88,8 +92,10 @@ impl Map {
             scout_senders,
             scout_receivers,
             gatherers,
-            resources,
-            finded_resources,
+            gatherer_senders,
+            gatherer_receivers,
+            resources: Arc::new(RwLock::new(resources)),
+            finded_resources: Arc::new(RwLock::new(finded_resources)),
             map_matrix: Arc::new(RwLock::new(map_matrix)),
             age: 0,
             base: Base::new(rows, cols),
@@ -111,12 +117,11 @@ impl Map {
             let rows = self.rows;
             let cols = self.cols;
             let seed = self.seed;
-            let scout_id = scout.id;
 
             let mut cloned_scout = scout.clone();
-            self.scout_senders.insert(scout_id, scout_sender);
-            self.scout_receivers.insert(scout_id, map_receiver);
-            self.scouts.insert(scout_id, scout);
+            self.scout_senders.insert(scout.id, scout_sender);
+            self.scout_receivers.insert(scout.id, map_receiver);
+            self.scouts.insert(scout.id, scout);
             let log_dir = Path::new("logs");
             if !log_dir.exists() {
                 create_dir_all(log_dir).expect("Failed to create log directory");
@@ -135,9 +140,31 @@ impl Map {
         y: u32,
         id_generator: &mut IDGenerator
     ) {
-        let loc = Localization{ x, y };
+        let loc = Localization { x, y };
+
         if let Some(gatherer) = Gatherer::new(loc, id_generator) {
+            let (map_sender, map_receiver): (Sender<EventType>, Receiver<EventType>) = channel();
+            let (gatherer_sender, gatherer_receiver): (Sender<EventType>, Receiver<EventType>) = channel();
+            let map_matrix = Arc::clone(&self.map_matrix);
+            
+            let resources = Arc::clone(&self.resources);
+            let finded_resources = Arc::clone(&self.finded_resources);
+            let base_loc = self.base.loc;
+            let seed = self.seed;
+
+            let mut cloned_gatherer = gatherer.clone();
+            self.gatherer_senders.insert(gatherer.id, gatherer_sender);
+            self.gatherer_receivers.insert(gatherer.id, map_receiver);
             self.gatherers.insert(gatherer.id, gatherer);
+            let log_dir = Path::new("logs");
+            if !log_dir.exists() {
+                create_dir_all(log_dir).expect("Failed to create log directory");
+            }
+            thread::spawn(move || {
+                let thread_id = std::thread::current().id();
+                cloned_gatherer.handle_events(map_matrix, resources, base_loc, seed, finded_resources, gatherer_receiver, map_sender);
+            });
+
         }
     }
 
@@ -150,7 +177,8 @@ impl Map {
         if let Some(kind) = ResourceKind::from_str(resource_kind_str) {
             let loc = self.find_free_localization();
             if let Some(resource) = Resource::new_resource(loc, kind, initial_quantity, id_generator) {
-                self.resources.insert(resource.id, resource);
+                let mut resources = self.resources.write().unwrap();
+                resources.insert(resource.id, resource);
             }
         } else {
             eprintln!("Unknown resource kind : {}", resource_kind_str);
@@ -171,7 +199,8 @@ impl Map {
     
             if cell.display != '#' && cell.display != '8' {
                 let mut is_free = true;
-                for resource in self.resources.values() {
+                let mut resources = self.resources.read().unwrap();
+                for resource in resources.values() {
                     if resource.loc.x == x && resource.loc.y == y {
                         is_free = false;
                         break;
@@ -189,18 +218,13 @@ impl Map {
 
     pub fn update_explore_matrix(&mut self) {
 
-        let mut file = OpenOptions::new()
-            .create(true)
-            .append(true)
-            .open("logs/explore.log")
-            .expect("Impossible d'ouvrir le fichier explore.log");
     
         let mut map_matrix = self.map_matrix.write().unwrap();
-    
+        let mut finded_resources = self.finded_resources.write().unwrap();
+        
         for scout in self.scouts.values() {
             let x = scout.loc.x as i32;
             let y = scout.loc.y as i32;
-            let _ = writeln!(file, "  Scout {}: ({}, {})", scout.id, x, y);
             for delta_x in -1..=1 {
                 for delta_y in -1..=1 {
                     let dx = x + delta_x;
@@ -209,8 +233,8 @@ impl Map {
                     if dx >= 0 && dx < self.rows as i32 && dy >= 0 && dy < self.cols as i32 {
                         map_matrix[dx as usize][dy as usize].explore = 30;
                         if let Some(resource) = self.find_resource_by_loc(dx as u32, dy as u32) {
-                            if !self.finded_resources.contains(&resource.id) {
-                                self.finded_resources.push(resource.id);
+                            if !finded_resources.contains(&resource.id) {
+                                finded_resources.push(resource.id);
                             }
                         }
                     }
@@ -236,19 +260,15 @@ impl Map {
         }
     }
 
-    pub fn find_resource_by_loc(&self, x: u32, y: u32) -> Option<&Resource> {
-        for resource in self.resources.values() {
+    pub fn find_resource_by_loc(&self, x: u32, y: u32) -> Option<Resource> {
+        let resources = self.resources.read().unwrap();
+        for resource in resources.values() {
             if resource.loc.x == x && resource.loc.y == y {
-                return Some(resource);
+                return Some(resource.clone());
             }
         }
         None
     }
-
-    pub fn delete_resource_by_id(&mut self, resource_id: u32) -> bool {
-        self.resources.remove(&resource_id).is_some()
-    }
-
     pub fn handle_event(&mut self, event: EventType) {
         if let EventType::Tick = event {
             self.age += 1;
@@ -257,25 +277,52 @@ impl Map {
                 let _ = tx.send(EventType::Tick);
             }
 
+            for tx in self.gatherer_senders.values() {
+                let _ = tx.send(EventType::Tick);
+            }
+    
             for (id, rx) in self.scout_receivers.iter() {
                 if let Ok(response) = rx.recv() {
-                    if let EventType::ScoutMoved(_, new_loc) = response {
+                    if let EventType::Moved(new_loc) = response {
                         if let Some(scout) = self.scouts.get_mut(id) {
                             scout.loc = new_loc;
                         }
                     }
                 }
             }
-            let map_matrix = self.map_matrix.read().unwrap();
-            let finded_resources = &self.finded_resources;
-            let resources = &mut self.resources;
-            let base = &mut self.base;
-
-            for gatherer in self.gatherers.values_mut() {
-                gatherer.choose(finded_resources, resources, self.seed, &map_matrix, base);
+            for (id, rx) in self.gatherer_receivers.iter() {
+                if let Ok(response) = rx.recv() {
+                    match response {
+                        EventType::Moved(new_loc) => {
+                            if let Some(gatherer) = self.gatherers.get_mut(id) {
+                                gatherer.loc = new_loc;
+                            }
+                        }
+                        EventType::Deposit((cristal, energy)) => {
+                            let toto = 1;
+                        }
+                        EventType::Extract(resource_id, (cristal, energy)) => {
+                            let toto = 2;
+                        }
+                        EventType::Tick => {
+                            let toto = 3;
+                        }
+                        EventType::Nothing => {
+                            let toto = 4;
+                        }
+                    }
+                }
             }
+            // let map_matrix = self.map_matrix.read().unwrap();
+            // let finded_resources = &self.finded_resources;
+            // let resources = &mut self.resources;
+            // let base = &mut self.base;
+
+            // // for gatherer in self.gatherers.values_mut() {
+            // //     gatherer.choose(finded_resources, resources, self.seed, &map_matrix, base);
+            // // }
     
-            drop(map_matrix);
+            // drop(map_matrix);
             self.clear_empty_resources();
             self.decay_passage_counters();
             self.update_explore_matrix();
@@ -295,7 +342,9 @@ impl Map {
             }
         }
 
-        for (_, resource) in &self.resources {
+        let mut resources = self.resources.read().unwrap();
+
+        for (_, resource) in resources.iter() {
             let x = resource.loc.x as usize;
             let y = resource.loc.y as usize;
             if map_matrix[x][y].explore != -1 {
@@ -335,7 +384,8 @@ impl Map {
     }
 
     fn clear_empty_resources(&mut self) {
-        let ids_to_remove: Vec<u32> = self.resources.iter()
+        let mut resources = self.resources.write().unwrap();
+        let ids_to_remove: Vec<u32> = resources.iter()
             .filter_map(|(id, resource)| {
                 if resource.remaining_quantity == 0 {
                     Some(*id)
@@ -344,9 +394,10 @@ impl Map {
                 }
             })
             .collect();
+        let mut finded_resources = self.finded_resources.write().unwrap();
         for id in ids_to_remove.iter() {
-            self.resources.remove(id);
-            self.finded_resources.retain(|&resource_id| resource_id != *id);
+            resources.remove(id);
+            finded_resources.retain(|&resource_id| resource_id != *id);
         }
     }
 

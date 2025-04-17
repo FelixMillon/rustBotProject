@@ -65,7 +65,7 @@ impl Scout {
                             thread_id, self.id, self.loc.x, self.loc.y
                         )
                         .expect("Failed to write to log file");
-                        let _ = map_sender.send(EventType::ScoutMoved(self.id, self.loc));
+                        let _ = map_sender.send(EventType::Moved(self.loc));
                     }
                     _ => {
                         writeln!(log_file, "[THREAD {:?}] Scout {} got unknown event", thread_id, self.id)
