@@ -1,8 +1,13 @@
 use std::collections::HashMap;
+use std::sync::mpsc::{Sender, Receiver, channel};
 use noise::{NoiseFn, Perlin};
 use rand::prelude::*;
 use std::f64;
-
+use std::sync::{Arc, Mutex};
+use std::thread;
+use std::fs::{create_dir_all, OpenOptions};
+use std::io::Write;
+use std::path::Path;
 use crate::id_generator::IDGenerator;
 use crate::gatherers::*;
 use crate::scouts::*;
@@ -14,6 +19,8 @@ pub struct Map {
     pub rows: u32,
     pub seed: u64,
     pub scouts: HashMap<u32, Scout>,
+    pub scout_senders: HashMap<u32, Sender<EventType>>,
+    pub scout_receivers: HashMap<u32, Receiver<EventType>>,
     pub gatherers: HashMap<u32, Gatherer>,
     pub resources: HashMap<u32, Resource>,
     pub finded_resources: Vec<u32>,  
@@ -60,6 +67,8 @@ impl Base {
 impl Map {
     pub fn new(rows: u32, cols: u32, seed: u64) -> Self {
         let scouts = HashMap::new();
+        let scout_senders = HashMap::new();
+        let scout_receivers = HashMap::new();
         let gatherers = HashMap::new();
         let resources = HashMap::new();
         let mut map_matrix = Vec::new();
@@ -76,6 +85,8 @@ impl Map {
             cols,
             seed,
             scouts,
+            scout_senders,
+            scout_receivers,
             gatherers,
             resources,
             finded_resources,
@@ -91,9 +102,30 @@ impl Map {
         y: u32,
         id_generator: &mut IDGenerator
     ) {
-        let loc = Localization{ x, y };
-        if let Some(scout) = Scout::new(loc, id_generator) {
-            self.scouts.insert(scout.id, scout);
+        let loc = Localization { x, y };
+
+        if let Some(mut scout) = Scout::new(loc, id_generator) {
+            let (map_sender, map_receiver): (Sender<EventType>, Receiver<EventType>) = channel();
+            let (scout_sender, scout_receiver): (Sender<EventType>, Receiver<EventType>) = channel();
+            let map_matrix = self.map_matrix.clone();
+            let rows = self.rows;
+            let cols = self.cols;
+            let seed = self.seed;
+            let scout_id = scout.id;
+
+            let mut cloned_scout = scout.clone();
+            self.scout_senders.insert(scout_id, scout_sender);
+            self.scout_receivers.insert(scout_id, map_receiver);
+            self.scouts.insert(scout_id, scout);
+            let log_dir = Path::new("logs");
+            if !log_dir.exists() {
+                create_dir_all(log_dir).expect("Failed to create log directory");
+            }
+            thread::spawn(move || {
+                let thread_id = std::thread::current().id();
+                cloned_scout.handle_events(map_matrix, rows, cols, seed, thread_id, scout_receiver, map_sender);
+            });
+
         }
     }
 
@@ -155,9 +187,17 @@ impl Map {
     }
 
     pub fn update_explore_matrix(&mut self) {
+
+        let mut file = OpenOptions::new()
+        .create(true)
+        .append(true)
+        .open("logs/explore.log")
+        .expect("Impossible d'ouvrir le fichier explore.log");
+
         for scout in self.scouts.values() {
             let x = scout.loc.x as i32;
             let y = scout.loc.y as i32;
+            let _ = writeln!(file, "  Scout {}: ({}, {})", scout.id, x, y);
             for delta_x in -1..=1 {
                 for delta_y in -1..=1 {
                     let dx = x + delta_x;
@@ -208,37 +248,35 @@ impl Map {
     pub fn handle_event(&mut self, event: EventType) {
         if let EventType::Tick = event {
             self.age += 1;
-
-            let scout_ids: Vec<u32> = self.scouts.keys().cloned().collect();
-            let gatherer_ids: Vec<u32> = self.gatherers.keys().cloned().collect();
-
-            let seed = self.seed;
+    
+            for tx in self.scout_senders.values() {
+                let _ = tx.send(EventType::Tick);
+            }
+    
+            for (id, rx) in self.scout_receivers.iter() {
+                if let Ok(response) = rx.recv() {
+                    if let EventType::ScoutMoved(_, new_loc) = response {
+                        if let Some(scout) = self.scouts.get_mut(id) {
+                            scout.loc = new_loc;
+                        }
+                    }
+                }
+            }
+        
             let map_matrix = &self.map_matrix;
             let finded_resources = &self.finded_resources;
-            let resources = &mut self.resources;    
-            let rows = self.rows;
-            let cols = self.cols;
+            let resources = &mut self.resources;
             let base = &mut self.base;
-
-            // Exploration des scouts
-            for id in scout_ids {
-                if let Some(scout) = self.scouts.get_mut(&id){
-                    scout.explore(map_matrix, rows, cols, seed);
-                }
+    
+            
+            for gatherer in self.gatherers.values_mut() {
+                gatherer.choose(finded_resources, resources, self.seed, map_matrix, base);
             }
-
-            // Action des gatherers
-            for id in gatherer_ids {
-                if let Some(gatherer) = self.gatherers.get_mut(&id){
-                    gatherer.choose(finded_resources, resources, seed, map_matrix, base);
-                }
-            }
-
-            // Nettoyage des ressources vides
+    
             self.clear_empty_resources();
-            // Décadence des compteurs de passage
+    
             self.decay_passage_counters();
-            // Mise à jour des explorations
+    
             self.update_explore_matrix();
         }
     }

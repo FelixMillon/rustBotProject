@@ -1,39 +1,70 @@
 use rand::prelude::*;
 use std::collections::{VecDeque, HashMap};
+use std::sync::{Arc, Mutex};
+use std::sync::mpsc::{self, Sender, Receiver};
+use std::thread::ThreadId;
+use std::fs::{OpenOptions};
+use std::io::Write;
+use std::thread;
+use std::time::Duration;
 
 use crate::id_generator::IDGenerator;
 use crate::events::*;
 use crate::map::{Localization, Cell};
 
+#[derive(Clone,Debug)]
 pub struct Scout {
     pub id: u32,
     pub loc: Localization,
     pub display: char,
-    pub prev_loc: Option<Localization>,
+    pub prev_loc: Option<Localization>
 }
 
 impl Scout {
-    pub fn new(
-        loc: Localization,
-        id_generator: &mut IDGenerator,
-    ) -> Option<Self> {
+    pub fn new(loc: Localization, id_generator: &mut IDGenerator) -> Option<Self> {
         let id = id_generator.generate_id();
         let display = 'S';
 
-        Some(
-            Self {
-                id,
-                loc,
-                prev_loc: Some(loc),
-                display,
+        Some(Self {
+            id,
+            loc,
+            prev_loc: Some(loc),
+            display
+        })
+    }
+
+    pub fn handle_events(&mut self, map_matrix: Vec<Vec<Cell>>, rows: u32, cols: u32, seed: u64, thread_id: ThreadId, scout_receiver: Receiver<EventType>, map_sender: Sender<EventType>) {
+        
+        let mut log_file = OpenOptions::new()
+        .create(true)
+        .append(true)
+        .open(format!("logs/scout_{}.log", self.id))
+        .expect("Failed to open log file");
+        writeln!(log_file, "[THREAD {:?}] Scout {} is alive!", thread_id, self.id)
+            .expect("Failed to write to log file");
+        loop {
+            if let Ok(event) = scout_receiver.recv() {
+                match event {
+                    EventType::Tick => {
+
+                        self.explore(&map_matrix, rows, cols, seed);
+                        writeln!(log_file, "[THREAD {:?}] Scout {} explored at loc ({}, {})", thread_id, self.id, self.loc.x, self.loc.y)
+                            .expect("Failed to write to log file");
+                        let _ = map_sender.send(EventType::ScoutMoved(self.id, self.loc));
+                    }
+                    _ => {
+                        writeln!(log_file, "[THREAD {:?}] Scout {} got unknown event", thread_id, self.id)
+                            .expect("Failed to write to log file");
+                    }
+                }
             }
-        )
+        }
     }
 
     fn initialize_rng(&self, seed: u64) -> StdRng {
-        StdRng::seed_from_u64(seed.wrapping_add(
-            self.id.pow(5) as u64 * 31 + self.loc.x as u64 * 17 + self.loc.y as u64 * 13
-        ))
+        StdRng::seed_from_u64(
+            seed.wrapping_add(self.id.pow(5) as u64 * 31 + self.loc.x as u64 * 17 + self.loc.y as u64 * 13),
+        )
     }
 
     pub fn explore(&mut self, map_matrix: &Vec<Vec<Cell>>, rows: u32, cols: u32, seed: u64) {
@@ -57,7 +88,7 @@ impl Scout {
         map_matrix: &Vec<Vec<Cell>>,
         rows: u32,
         cols: u32,
-        rng: &mut StdRng
+        rng: &mut StdRng,
     ) -> bool {
         let min_explore = circle_cells.iter()
             .filter(|&&(i, j)| map_matrix[i as usize][j as usize].display != '8')
@@ -85,7 +116,7 @@ impl Scout {
             .cloned()
             .filter(|&(i, j)| map_matrix[i as usize][j as usize].display != '8')
             .collect();
-        
+
         self.attempt_movement(&mut retry_cells, map_matrix, rows, cols, rng)
     }
 
