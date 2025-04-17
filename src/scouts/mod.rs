@@ -10,7 +10,7 @@ use std::time::Duration;
 
 use crate::id_generator::IDGenerator;
 use crate::events::*;
-use crate::map::{Localization, Cell};
+use crate::game::{Localization, Cell};
 
 #[derive(Clone,Debug)]
 pub struct Scout {

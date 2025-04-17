@@ -8,7 +8,7 @@ use std::io::Write;
 use crate::id_generator::IDGenerator;
 use crate::events::*;
 use crate::resources::*;
-use crate::map::{Localization, Cell};
+use crate::game::{Localization, Cell};
 
 #[derive(Clone,Debug)]
 pub struct Gatherer {

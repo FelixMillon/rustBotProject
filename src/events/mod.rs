@@ -1,4 +1,4 @@
-use crate::map::Localization;
+use crate::game::Localization;
 
 pub enum EventType {
     Tick,

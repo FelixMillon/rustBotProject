@@ -1,141 +1,82 @@
-use ratatui::prelude::*;
-use ratatui::widgets::{Block, Borders, Paragraph};
-use ratatui::backend::CrosstermBackend;
-use crossterm::{
-    event::{self, Event, KeyCode},
-    terminal::{enable_raw_mode, disable_raw_mode},
-};
-use std::io::{self, stdout};
-use std::time::{Duration, Instant};
-mod map;
+use axum::{Router, routing::get};
+use axum::response::Json;
+use axum::Server;
+use serde::Serialize;
+use std::sync::{Arc, RwLock};
+use std::net::SocketAddr;
+use tokio::sync::{Mutex, mpsc};
+use game::{Game, Cell};
+use events::EventType;
+mod game;
 mod gatherers;
 mod scouts;
 mod resources;
 mod id_generator;
 mod events;
-use events::EventType;
-use map::Map;
 
-fn main() -> Result<(), Box<dyn std::error::Error>> {
-    enable_raw_mode()?;
+#[derive(Serialize)]
+struct StateResponse {
+    map: Vec<Vec<char>>,
+    crystal_count: u16,
+    energy_count: u16,
+}
+
+#[tokio::main]
+async fn main() {
     let mut id_generator = id_generator::IDGenerator::new();
-    let mut stdout = stdout();
-    let backend = CrosstermBackend::new(stdout);
-    let mut terminal = Terminal::new(backend)?;
-    let mut last_tick = Instant::now(); 
-    let mut map = Map::new(20, 40, 44);
+    let mut map = Game::new(20, 40, 44);
     map.generate_map_obstacles();
     map.generate_resources(&mut id_generator, 10);
-    map.add_scout(10,20,&mut id_generator);
-    map.add_scout(10,20,&mut id_generator);
-    map.add_scout(10,20,&mut id_generator);
-    map.add_scout(10,20,&mut id_generator);
-    map.add_scout(10,20,&mut id_generator);
-    map.add_scout(10,20,&mut id_generator);
-    map.add_scout(10,20,&mut id_generator);
-    map.add_scout(9,21,&mut id_generator);  // TEST TO DELETE
-    map.add_scout(11,19,&mut id_generator);  // TEST TO DELETE
-    map.add_gatherer(10,20,&mut id_generator);
-    map.add_gatherer(10,20,&mut id_generator);
-    map.add_gatherer(10,20,&mut id_generator);
-    terminal.clear().unwrap();
+    map.add_scout(10, 20, &mut id_generator);
+    map.add_scout(10, 20, &mut id_generator);
+    map.add_scout(10, 20, &mut id_generator);
+    map.add_scout(10, 20, &mut id_generator);
+    map.add_scout(10, 20, &mut id_generator);
+    map.add_scout(10, 20, &mut id_generator);
+    map.add_scout(10, 20, &mut id_generator);
+    map.add_gatherer(10, 20, &mut id_generator);
+    map.add_gatherer(10, 20, &mut id_generator);
+    map.add_gatherer(10, 20, &mut id_generator);
 
-    // terminal.draw(|f| {
-    //     let size = f.size();
-    //     let block = Block::default().borders(Borders::ALL).title("Map");
-    //     f.render_widget(block, size);
+    let map = Arc::new(Mutex::new(map));
 
-    //     for (i, row) in map.generate_display().iter().enumerate() {
-    //         for (j, &cell) in row.iter().enumerate() {
-    //             let x = j as u16;
-    //             let y = i as u16;
-    //             let text = Text::from(Span::raw(cell.display.to_string()));
-    //             f.render_widget(Paragraph::new(text), Rect::new(x, y, 1, 1));
-    //         }
-    //     }
-    // }).unwrap();
-    loop {
-        if event::poll(std::time::Duration::from_millis(500))? {
-            if let Event::Key(key) = event::read()? {
-                match key.code {
-                    KeyCode::Char('p') => {
-                        terminal.draw(|f| {
-                            let size = f.size();
-                            let block = Block::default().borders(Borders::ALL).title("Base Resources");
-                            f.render_widget(block, size);
+    let (tx, mut rx) = mpsc::channel(32);
 
-                            let crystal_count = map.base.crystal;
-                            let energy_count = map.base.energy;
-                            let resources_text = format!(
-                                "Crystal: {} :: Energy: {}",
-                                crystal_count, energy_count
-                            );
-
-                            let text = Text::from(Span::raw(resources_text));
-                            f.render_widget(Paragraph::new(text), Rect::new(1, 1, size.width - 2, size.height - 2));
-                        }).unwrap();
-                    }
-                    KeyCode::Esc | KeyCode::Char('q') => {
-                        break;
-                    }
-                    _ => {}
-                }
-                
+    tokio::spawn(async move {
+        while let Some(event) = rx.recv().await {
+            match event {
+                EventType::Tick => {
+                    println!("Tick event received");
+                },
+                _ => {}
             }
         }
-        if last_tick.elapsed() >= Duration::from_millis(250) {
-            map.handle_event(EventType::Tick);
-    
-            terminal.draw(|f| {
-                let size = f.size();
-                let block = Block::default().borders(Borders::ALL).title("Map");
-                f.render_widget(block, size);
-    
-                for (i, row) in map.generate_display().iter().enumerate() {
-                    for (j, &cell) in row.iter().enumerate() {
-                        let x = j as u16;
-                        let y = i as u16;
-                        let map_matrix = map.map_matrix.read().unwrap();
-                        let explore_value = map_matrix[i as usize][j as usize].explore;
-                        let mut gray_value = 0 as u8;
-                        if explore_value < 0 {
-                            gray_value = 0 as u8;
-                        } else if explore_value > 30 {
-                            gray_value = 30 as u8;
-                        } else {
-                            gray_value = explore_value as u8;
-                        }
-                        gray_value = gray_value * 8;
-                        let mut color = Color::Rgb(gray_value, gray_value, gray_value);
-                        match cell.display {
-                            'C' => {
-                                color = Color::Rgb(0, 255, 255);
-                            }
-                            'E' => {
-                                color = Color::Rgb(255, 255, 0);
-                            }
-                            'S' => {
-                                color = Color::Rgb(0, 155, 0);
-                            }
-                            'G' => {
-                                color = Color::Rgb(255, 0, 0);
-                            }
-                            _ => {}
-                        }
-                        let cell_style = Style::default().fg(color);
-    
-                        let text = Text::from(Span::raw(cell.display.to_string()));
-                        f.render_widget(
-                            Paragraph::new(text).style(cell_style),
-                            Rect::new(x, y, 1, 1),
-                        );
-                    }
-                }
-            }).unwrap();
-    
-            last_tick = Instant::now();
+    });
+
+    let app = Router::new().route("/state", get(move || {
+        let map = Arc::clone(&map);
+
+        async move {
+            let mut map_lock = map.lock().await;
+            map_lock.handle_event(EventType::Tick);
+
+            let response = StateResponse {
+                map: map_lock.generate_display().iter().map(|row| {
+                    row.iter().map(|cell| cell.display).collect::<Vec<_>>()
+                }).collect(),
+                crystal_count: map_lock.base.crystal,
+                energy_count: map_lock.base.energy,
+            };
+
+            Json(response)
         }
-    }
-    disable_raw_mode()?;
-    Ok(())
+    }));
+
+    let addr = SocketAddr::from(([127, 0, 0, 1], 3000));
+    println!("Server running on {}", addr);
+
+    Server::bind(&addr)
+        .serve(app.into_make_service())
+        .await
+        .unwrap();
 }

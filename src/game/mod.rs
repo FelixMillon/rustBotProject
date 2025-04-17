@@ -14,7 +14,7 @@ use crate::scouts::*;
 use crate::resources::*;
 use crate::events::*;
 
-pub struct Map {
+pub struct Game {
     pub cols: u32,
     pub rows: u32,
     pub seed: u64,
@@ -66,7 +66,7 @@ impl Base {
     }
 }
 
-impl Map {
+impl Game {
     pub fn new(rows: u32, cols: u32, seed: u64) -> Self {
         let scouts = HashMap::new();
         let scout_senders = HashMap::new();
