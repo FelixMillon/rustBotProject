@@ -1,6 +1,6 @@
 use rand::prelude::*;
 use std::collections::{VecDeque, HashMap};
-use std::sync::{Arc, Mutex};
+use std::sync::{Arc, Mutex, RwLock};
 use std::sync::mpsc::{self, Sender, Receiver};
 use std::thread::ThreadId;
 use std::fs::{OpenOptions};
@@ -33,23 +33,38 @@ impl Scout {
         })
     }
 
-    pub fn handle_events(&mut self, map_matrix: Vec<Vec<Cell>>, rows: u32, cols: u32, seed: u64, thread_id: ThreadId, scout_receiver: Receiver<EventType>, map_sender: Sender<EventType>) {
-        
+    pub fn handle_events(
+        &mut self, 
+        map_matrix: Arc<RwLock<Vec<Vec<Cell>>>>,
+        rows: u32, 
+        cols: u32, 
+        seed: u64, 
+        thread_id: ThreadId, 
+        scout_receiver: Receiver<EventType>, 
+        map_sender: Sender<EventType>
+    ) {
         let mut log_file = OpenOptions::new()
-        .create(true)
-        .append(true)
-        .open(format!("logs/scout_{}.log", self.id))
-        .expect("Failed to open log file");
+            .create(true)
+            .append(true)
+            .open(format!("logs/scout_{}.log", self.id))
+            .expect("Failed to open log file");
         writeln!(log_file, "[THREAD {:?}] Scout {} is alive!", thread_id, self.id)
             .expect("Failed to write to log file");
+    
         loop {
             if let Ok(event) = scout_receiver.recv() {
                 match event {
                     EventType::Tick => {
-
-                        self.explore(&map_matrix, rows, cols, seed);
-                        writeln!(log_file, "[THREAD {:?}] Scout {} explored at loc ({}, {})", thread_id, self.id, self.loc.x, self.loc.y)
-                            .expect("Failed to write to log file");
+                        let map_matrix = map_matrix.read().unwrap();
+    
+                        let map_matrix_copy = map_matrix.clone();
+                        self.explore(&map_matrix_copy, rows, cols, seed);
+                        writeln!(
+                            log_file,
+                            "[THREAD {:?}] Scout {} explored at loc ({}, {})",
+                            thread_id, self.id, self.loc.x, self.loc.y
+                        )
+                        .expect("Failed to write to log file");
                         let _ = map_sender.send(EventType::ScoutMoved(self.id, self.loc));
                     }
                     _ => {

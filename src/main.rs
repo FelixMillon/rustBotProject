@@ -95,7 +95,8 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                     for (j, &cell) in row.iter().enumerate() {
                         let x = j as u16;
                         let y = i as u16;
-                        let explore_value = map.map_matrix[i][j].explore;
+                        let map_matrix = map.map_matrix.read().unwrap();
+                        let explore_value = map_matrix[i as usize][j as usize].explore;
                         let mut gray_value = 0 as u8;
                         if explore_value < 0 {
                             gray_value = 0 as u8;

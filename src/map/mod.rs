@@ -1,9 +1,9 @@
 use std::collections::HashMap;
 use std::sync::mpsc::{Sender, Receiver, channel};
+use std::sync::{Arc, RwLock, Mutex};
 use noise::{NoiseFn, Perlin};
 use rand::prelude::*;
 use std::f64;
-use std::sync::{Arc, Mutex};
 use std::thread;
 use std::fs::{create_dir_all, OpenOptions};
 use std::io::Write;
@@ -24,7 +24,7 @@ pub struct Map {
     pub gatherers: HashMap<u32, Gatherer>,
     pub resources: HashMap<u32, Resource>,
     pub finded_resources: Vec<u32>,  
-    pub map_matrix: Vec<Vec<Cell>>,
+    pub map_matrix: Arc<RwLock<Vec<Vec<Cell>>>>,
     pub age: u32,
     pub base: Base,
 }
@@ -90,7 +90,7 @@ impl Map {
             gatherers,
             resources,
             finded_resources,
-            map_matrix,
+            map_matrix: Arc::new(RwLock::new(map_matrix)),
             age: 0,
             base: Base::new(rows, cols),
         }
@@ -107,7 +107,7 @@ impl Map {
         if let Some(mut scout) = Scout::new(loc, id_generator) {
             let (map_sender, map_receiver): (Sender<EventType>, Receiver<EventType>) = channel();
             let (scout_sender, scout_receiver): (Sender<EventType>, Receiver<EventType>) = channel();
-            let map_matrix = self.map_matrix.clone();
+            let map_matrix = Arc::clone(&self.map_matrix);
             let rows = self.rows;
             let cols = self.cols;
             let seed = self.seed;
@@ -166,7 +166,8 @@ impl Map {
             rng = StdRng::seed_from_u64(rng.gen::<u64>().wrapping_add(11));
             let x = rng.gen_range(0..self.rows);
             let y = rng.gen_range(0..self.cols);
-            let cell = &self.map_matrix[x as usize][y as usize];
+            let map_matrix = self.map_matrix.read().unwrap(); 
+            let cell = &map_matrix[x as usize][y as usize];
     
             if cell.display != '#' && cell.display != '8' {
                 let mut is_free = true;
@@ -189,11 +190,13 @@ impl Map {
     pub fn update_explore_matrix(&mut self) {
 
         let mut file = OpenOptions::new()
-        .create(true)
-        .append(true)
-        .open("logs/explore.log")
-        .expect("Impossible d'ouvrir le fichier explore.log");
-
+            .create(true)
+            .append(true)
+            .open("logs/explore.log")
+            .expect("Impossible d'ouvrir le fichier explore.log");
+    
+        let mut map_matrix = self.map_matrix.write().unwrap();
+    
         for scout in self.scouts.values() {
             let x = scout.loc.x as i32;
             let y = scout.loc.y as i32;
@@ -204,7 +207,7 @@ impl Map {
                     let dy = y + delta_y;
 
                     if dx >= 0 && dx < self.rows as i32 && dy >= 0 && dy < self.cols as i32 {
-                        self.map_matrix[dx as usize][dy as usize].explore = 30;
+                        map_matrix[dx as usize][dy as usize].explore = 30;
                         if let Some(resource) = self.find_resource_by_loc(dx as u32, dy as u32) {
                             if !self.finded_resources.contains(&resource.id) {
                                 self.finded_resources.push(resource.id);
@@ -219,13 +222,14 @@ impl Map {
     pub fn decay_passage_counters(&mut self) {
         let center_x = self.rows / 2;
         let center_y = self.cols / 2;
+        let mut map_matrix = self.map_matrix.write().unwrap();
     
-        for row in 0..self.map_matrix.len() {
-            for col in 0..self.map_matrix[row].len() {
+        for row in 0..self.rows as usize {
+            for col in 0..self.cols as usize {
                 if !(row >= (center_x - 1) as usize && row <= (center_x + 1) as usize &&
                      col >= (center_y - 1) as usize && col <= (center_y + 1) as usize) {
-                    if self.map_matrix[row][col].explore > 0 {
-                        self.map_matrix[row][col].explore -= 1;
+                    if map_matrix[row][col].explore > 0 {
+                        map_matrix[row][col].explore -= 1;
                     }
                 }
             }
@@ -252,7 +256,7 @@ impl Map {
             for tx in self.scout_senders.values() {
                 let _ = tx.send(EventType::Tick);
             }
-    
+
             for (id, rx) in self.scout_receivers.iter() {
                 if let Ok(response) = rx.recv() {
                     if let EventType::ScoutMoved(_, new_loc) = response {
@@ -262,31 +266,30 @@ impl Map {
                     }
                 }
             }
-        
-            let map_matrix = &self.map_matrix;
+            let map_matrix = self.map_matrix.read().unwrap();
             let finded_resources = &self.finded_resources;
             let resources = &mut self.resources;
             let base = &mut self.base;
-    
-            
+
             for gatherer in self.gatherers.values_mut() {
-                gatherer.choose(finded_resources, resources, self.seed, map_matrix, base);
+                gatherer.choose(finded_resources, resources, self.seed, &map_matrix, base);
             }
     
+            drop(map_matrix);
             self.clear_empty_resources();
-    
             self.decay_passage_counters();
-    
             self.update_explore_matrix();
         }
     }
 
     pub fn generate_display(&mut self) -> Vec<Vec<Cell>> {
-        let mut result_map = self.map_matrix.clone();
+
+        let map_matrix = self.map_matrix.read().unwrap();
+        let mut result_map = map_matrix.clone();
 
         for x in 0..self.rows as usize {
             for y in 0..self.cols as usize {
-                if self.map_matrix[x][y].explore == -1 {
+                if map_matrix[x][y].explore == -1 {
                     result_map[x][y].display = ' ';
                 }
             }
@@ -295,8 +298,7 @@ impl Map {
         for (_, resource) in &self.resources {
             let x = resource.loc.x as usize;
             let y = resource.loc.y as usize;
-    
-            if self.map_matrix[x][y].explore != -1 {
+            if map_matrix[x][y].explore != -1 {
                 result_map[x][y].display = match resource.kind {
                     ResourceKind::Crystal => 'C',
                     ResourceKind::Energy => 'E',
@@ -310,15 +312,13 @@ impl Map {
             let x = scout.loc.x as usize;
             let y = scout.loc.y as usize;
     
-            let display = scout.display;
-            result_map[x][y].display = display;
+            result_map[x][y].display = scout.display;
         }
         for (_, gatherer) in &self.gatherers {
             let x = gatherer.loc.x as usize;
             let y = gatherer.loc.y as usize;
     
-            let display = gatherer.display;
-            result_map[x][y].display = display;
+            result_map[x][y].display = gatherer.display;
         }
 
         result_map
@@ -355,13 +355,14 @@ impl Map {
         let scale = ((self.rows + self.cols) as f64) / 10.0;
         let mut rng = StdRng::seed_from_u64(self.seed);
     
+        let mut map_matrix = self.map_matrix.write().unwrap();
         let threshold = perlin.get([self.seed as f64 / 100.0, self.seed as f64 / 100.0]);
     
         for i in 0..self.rows {
             for j in 0..self.cols {
                 let noise_value = perlin.get([i as f64 / scale, j as f64 / scale]);
                 if noise_value > threshold + 0.2 {
-                    self.map_matrix[i as usize][j as usize].display = '8'; // Ajouter un obstacle
+                    map_matrix[i as usize][j as usize].display = '8';
                 }
             }
         }
@@ -371,7 +372,7 @@ impl Map {
     
         let safe_zone_size = 6;
         let mut safe_zone_noise = vec![vec![false; self.cols as usize]; self.rows as usize];
-    
+
         for i in 0..self.rows {
             for j in 0..self.cols {
                 let dist_x = (i as f64 - center_x as f64).abs();
@@ -385,20 +386,18 @@ impl Map {
                 }
             }
         }
-    
         for i in 0..self.rows {
             for j in 0..self.cols {
                 if safe_zone_noise[i as usize][j as usize] {
-                    self.map_matrix[i as usize][j as usize].display = ' '; // Zone vide
+                    map_matrix[i as usize][j as usize].display = ' '; // Zone vide
                 }
             }
         }
-    
         for i in (center_x - 1) as i32..=(center_x + 1) as i32 {
             for j in (center_y - 1) as i32..=(center_y + 1) as i32 {
                 if i >= 0 && j >= 0 && i < self.rows as i32 && j < self.cols as i32 {
-                    self.map_matrix[i as usize][j as usize].display = '#';
-                    self.map_matrix[i as usize][j as usize].explore = 30;
+                    map_matrix[i as usize][j as usize].display = '#';
+                    map_matrix[i as usize][j as usize].explore = 30;
                 }
             }
         }
