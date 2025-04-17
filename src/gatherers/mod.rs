@@ -89,6 +89,16 @@ impl Gatherer {
                         let event = self.choose(&finded_resources_copy, &mut resources_copy, seed, &map_matrix_copy, base_loc);
                         let _ = map_sender.send(event);
                     }
+                    EventType::Collect(recolted) => {
+                        writeln!(
+                            log_file,
+                            "Gatherer {} extract {} crystal {} energy",
+                            self.id, recolted.0, recolted.1
+                        )
+                        .expect("Failed to write to log file");
+                        self.inventory.0 += recolted.0;
+                        self.inventory.1 += recolted.1;
+                    }
                     _ => {
                         writeln!(log_file, "Gatherer {} got unknown event", self.id)
                         .expect("Failed to write to log file");
@@ -118,14 +128,21 @@ impl Gatherer {
             if self.inventory.0 + self.inventory.1 >= self.inventory_size {
                 self.seek(map_matrix, base_loc);
                 if base_loc.same_loc(&self.loc) {
-                    return EventType::Deposit(self.inventory);
                     writeln!(
                         log_file,
                         "Gatherer {} make a deposit: cristal -> {} energy -> {}",
-                        self.id,  self.inventory.0, self.inventory.1
+                        self.id, self.inventory.0, self.inventory.1
+                    )
+                    .expect("Failed to write to log file");
+                    let deposit = (self.inventory.0, self.inventory.1);
+                    writeln!(
+                        log_file,
+                        "Size of the deposit: cristal -> {} energy -> {}",
+                        deposit.0, deposit.1
                     )
                     .expect("Failed to write to log file");
                     self.inventory = (0, 0);
+                    return EventType::Deposit(deposit);
                 }
             } else {
                 writeln!(
@@ -171,9 +188,6 @@ impl Gatherer {
                             )
                             .expect("Failed to write to log file");
                             if self.loc.same_loc(&resource.loc) {
-                                let gathered = resource.gather(10, 1.0);
-                                self.inventory.0 += gathered.0;
-                                self.inventory.1 += gathered.1;
                                 if resource.remaining_quantity == 0 {
                                     self.target = None;
                                     self.find(finded_resources, resources, seed);

@@ -299,16 +299,18 @@ impl Map {
                             }
                         }
                         EventType::Deposit((cristal, energy)) => {
-                            let toto = 1;
+                            self.base.crystal += cristal;
+                            self.base.energy += energy;
                         }
-                        EventType::Extract(resource_id, (cristal, energy)) => {
-                            let toto = 2;
+                        EventType::Extract(resource_id, (requested, rate)) => {
+                            if let Some(resource) = self.resources.write().unwrap().get_mut(&resource_id) {
+                                let extracted = resource.gather(requested, rate);
+                                if let Some(sender) = self.gatherer_senders.get(&id) {
+                                    let _ = sender.send(EventType::Collect(extracted));
+                                }
+                            }
                         }
-                        EventType::Tick => {
-                            let toto = 3;
-                        }
-                        EventType::Nothing => {
-                            let toto = 4;
+                        EventType::Tick | EventType::Collect((_, _)) | EventType::Nothing => {
                         }
                     }
                 }
