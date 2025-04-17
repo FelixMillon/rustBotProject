@@ -1,0 +1,42 @@
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+body {
+  font-family: Arial, sans-serif;
+  background-color: #f4f4f4;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  height: 100vh;
+}
+
+h1 {
+  margin-bottom: 20px;
+}
+
+.cell {
+  border: 1px solid #ccc;
+  background-color: #eee;
+}
+.crystal {
+  background-color: cyan;
+}
+.energy {
+  background-color: yellow;
+}
+.scout {
+  background-color: green;
+  color: white;
+}
+.gatherer {
+  background-color: red;
+  color: white;
+}
+
+#resources {
+  font-size: 18px;
+  margin-top: 20px;
+}
