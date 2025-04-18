@@ -1,11 +1,7 @@
-use rand::prelude::*;
-use std::collections::{VecDeque, HashMap};
-
 use crate::id_generator::IDGenerator;
-use crate::events::*;
 use crate::game::*;
 
-#[derive(Debug, Clone, Copy)]
+#[derive(Clone, Copy)]
 pub struct Resource {
     pub id: u32,
     pub loc: Localization,
@@ -90,11 +86,5 @@ impl Resource {
                 remaining_quantity: initial_quantity,
             }
         )
-    }
-
-    fn initialize_rng(&self, seed: u64) -> StdRng {
-        StdRng::seed_from_u64(seed.wrapping_add(
-            self.id.pow(5) as u64 * 31 + self.loc.x as u64 * 17 + self.loc.y as u64 * 13
-        ))
     }
 }

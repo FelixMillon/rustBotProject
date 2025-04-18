@@ -1,12 +1,7 @@
 use rand::prelude::*;
 use std::collections::{VecDeque, HashMap};
-use std::sync::{Arc, Mutex, RwLock};
-use std::sync::mpsc::{self, Sender, Receiver};
-use std::thread::ThreadId;
-use std::fs::{OpenOptions};
-use std::io::Write;
-use std::thread;
-use std::time::Duration;
+use std::sync::{Arc, RwLock};
+use std::sync::mpsc::{Sender, Receiver};
 
 use crate::id_generator::IDGenerator;
 use crate::events::*;
@@ -38,19 +33,11 @@ impl Scout {
         map_matrix: Arc<RwLock<Vec<Vec<Cell>>>>,
         rows: u32, 
         cols: u32, 
-        seed: u64, 
-        thread_id: ThreadId, 
+        seed: u64,
         scout_receiver: Receiver<EventType>, 
         map_sender: Sender<EventType>,
         display_obstacle: char,
     ) {
-        let mut log_file = OpenOptions::new()
-            .create(true)
-            .append(true)
-            .open(format!("logs/scout_{}.log", self.id))
-            .expect("Failed to open log file");
-        writeln!(log_file, "[THREAD {:?}] Scout {} is alive!", thread_id, self.id)
-            .expect("Failed to write to log file");
     
         loop {
             if let Ok(event) = scout_receiver.recv() {
@@ -60,17 +47,9 @@ impl Scout {
     
                         let map_matrix_copy = map_matrix.clone();
                         self.explore(&map_matrix_copy, rows, cols, seed, display_obstacle);
-                        writeln!(
-                            log_file,
-                            "[THREAD {:?}] Scout {} explored at loc ({}, {})",
-                            thread_id, self.id, self.loc.x, self.loc.y
-                        )
-                        .expect("Failed to write to log file");
                         let _ = map_sender.send(EventType::Moved(self.loc));
                     }
                     _ => {
-                        writeln!(log_file, "[THREAD {:?}] Scout {} got unknown event", thread_id, self.id)
-                            .expect("Failed to write to log file");
                     }
                 }
             }

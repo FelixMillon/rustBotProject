@@ -1,10 +1,7 @@
 use rand::prelude::*;
 use std::collections::{VecDeque, HashSet, HashMap};
-use std::sync::{Arc, Mutex, RwLock};
-use std::sync::mpsc::{self, Sender, Receiver};
-use std::thread::ThreadId;
-use std::fs::{OpenOptions};
-use std::io::Write;
+use std::sync::{Arc, RwLock};
+use std::sync::mpsc::{Sender, Receiver};
 use crate::id_generator::IDGenerator;
 use crate::events::*;
 use crate::resources::*;
@@ -15,7 +12,6 @@ pub struct Gatherer {
     pub id: u32,
     pub loc: Localization,
     pub display: char,
-    pub prev_loc: Option<Localization>,
     pub target: Option<u32>,
     pub inventory: (u16, u16),
     pub inventory_size: u16,
@@ -34,7 +30,6 @@ impl Gatherer {
             Self {
                 id,
                 loc,
-                prev_loc: Some(loc),
                 target: None,
                 display,
                 inventory: (0, 0),
@@ -61,13 +56,6 @@ impl Gatherer {
         map_sender: Sender<EventType>,
         display_obstacle: char,
     ) {
-        let mut log_file = OpenOptions::new()
-            .create(true)
-            .append(true)
-            .open(format!("logs/gatherer_{}.log", self.id))
-            .expect("Failed to open log file");
-        writeln!(log_file, "Gatherer {} is alive!", self.id)
-            .expect("Failed to write to log file");
 
         loop {
             if let Ok(event) = gatherer_receiver.recv() {
@@ -81,28 +69,14 @@ impl Gatherer {
                         let map_matrix_copy = map_matrix.clone();
                         let mut resources_copy = resources.clone();
                         let finded_resources_copy = finded_resources.clone();
-                        writeln!(
-                            log_file,
-                            "Gatherer {} receve a message",
-                            self.id
-                        )
-                        .expect("Failed to write to log file");
                         let event = self.choose(&finded_resources_copy, &mut resources_copy, seed, &map_matrix_copy, base_loc, display_obstacle);
                         let _ = map_sender.send(event);
                     }
                     EventType::Collect(recolted) => {
-                        writeln!(
-                            log_file,
-                            "Gatherer {} extract {} crystal {} energy",
-                            self.id, recolted.0, recolted.1
-                        )
-                        .expect("Failed to write to log file");
                         self.inventory.0 += recolted.0;
                         self.inventory.1 += recolted.1;
                     }
                     _ => {
-                        writeln!(log_file, "Gatherer {} got unknown event", self.id)
-                        .expect("Failed to write to log file");
                     }
                 }
             }
@@ -119,76 +93,28 @@ impl Gatherer {
         display_obstacle: char,
     ) -> EventType {
     
-        let mut log_file = OpenOptions::new()
-            .create(true)
-            .append(true)
-            .open(format!("logs/gatherer_{}.log", self.id))
-            .expect("Failed to open log file");
-
         if self.path.as_ref().map_or(true, |p| p.is_empty()) {
             // Si la capacité de l'inventaire est pleine, se rendre à la base.
             if self.inventory.0 + self.inventory.1 >= self.inventory_size {
                 self.seek(map_matrix, base_loc, display_obstacle);
                 if base_loc.same_loc(&self.loc) {
-                    writeln!(
-                        log_file,
-                        "Gatherer {} make a deposit: cristal -> {} energy -> {}",
-                        self.id, self.inventory.0, self.inventory.1
-                    )
-                    .expect("Failed to write to log file");
                     let deposit = (self.inventory.0, self.inventory.1);
-                    writeln!(
-                        log_file,
-                        "Size of the deposit: cristal -> {} energy -> {}",
-                        deposit.0, deposit.1
-                    )
-                    .expect("Failed to write to log file");
                     self.inventory = (0, 0);
                     return EventType::Deposit(deposit);
                 }
             } else {
-                writeln!(
-                    log_file,
-                    "Gatherer {} n'est pas plein",
-                    self.id
-                )
-                .expect("Failed to write to log file");
                 if self.target.is_none() {
                     self.find(finded_resources, resources, seed);
                     if let Some(target_id) = self.target {
                         if let Some(resource) = resources.get(&target_id) {
                             self.seek(map_matrix, resource.loc, display_obstacle);
-                            writeln!(
-                                log_file,
-                                "Gatherer {} cherche une target",
-                                self.id
-                            )
-                            .expect("Failed to write to log file");
                             return EventType::Nothing;
                         }
                     }
-                    writeln!(
-                        log_file,
-                        "Gatherer {} n'a pas de target",
-                        self.id
-                    )
-                    .expect("Failed to write to log file");
                     return EventType::Nothing;
                 } else {
-                    writeln!(
-                        log_file,
-                        "Gatherer {} a une target",
-                        self.id
-                    )
-                    .expect("Failed to write to log file");
                     if let Some(target_id) = self.target {
                         if let Some(resource) = resources.get_mut(&target_id) {
-                            writeln!(
-                                log_file,
-                                "Gatherer {} a trouvé une target",
-                                self.id
-                            )
-                            .expect("Failed to write to log file");
                             if self.loc.same_loc(&resource.loc) {
                                 if resource.remaining_quantity == 0 {
                                     self.target = None;
@@ -197,12 +123,6 @@ impl Gatherer {
                                 return EventType::Extract(target_id,(10, 1.0));
                             } else {
                                 self.seek(map_matrix, resource.loc, display_obstacle);
-                                writeln!(
-                                    log_file,
-                                    "Gatherer {} cherche une target",
-                                    self.id
-                                )
-                                .expect("Failed to write to log file");
                                 return EventType::Nothing;
                             }
                         } else {
@@ -214,12 +134,6 @@ impl Gatherer {
             }
         } else {
             self.step();
-            writeln!(
-                log_file,
-                "Gatherer {} explored at loc ({}, {})",
-                self.id, self.loc.x, self.loc.y
-            )
-            .expect("Failed to write to log file");
             return EventType::Moved(self.loc);
         }
         return EventType::Nothing;
