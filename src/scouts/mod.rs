@@ -41,7 +41,8 @@ impl Scout {
         seed: u64, 
         thread_id: ThreadId, 
         scout_receiver: Receiver<EventType>, 
-        map_sender: Sender<EventType>
+        map_sender: Sender<EventType>,
+        display_obstacle: char,
     ) {
         let mut log_file = OpenOptions::new()
             .create(true)
@@ -58,7 +59,7 @@ impl Scout {
                         let map_matrix = map_matrix.read().unwrap();
     
                         let map_matrix_copy = map_matrix.clone();
-                        self.explore(&map_matrix_copy, rows, cols, seed);
+                        self.explore(&map_matrix_copy, rows, cols, seed, display_obstacle);
                         writeln!(
                             log_file,
                             "[THREAD {:?}] Scout {} explored at loc ({}, {})",
@@ -82,15 +83,15 @@ impl Scout {
         )
     }
 
-    pub fn explore(&mut self, map_matrix: &Vec<Vec<Cell>>, rows: u32, cols: u32, seed: u64) {
+    pub fn explore(&mut self, map_matrix: &Vec<Vec<Cell>>, rows: u32, cols: u32, seed: u64, display_obstacle: char) {
         let mut rng = self.initialize_rng(seed);
         let circle_cells = get_circle_cells(self.loc.x as i32, self.loc.y as i32, rows as i32, cols as i32);
 
-        if self.try_move_to_best_cell(&circle_cells, map_matrix, rows, cols, &mut rng) {
+        if self.try_move_to_best_cell(&circle_cells, map_matrix, rows, cols, &mut rng, display_obstacle) {
             return;
         }
 
-        if self.try_move_to_any_cell(&circle_cells, map_matrix, rows, cols, &mut rng) {
+        if self.try_move_to_any_cell(&circle_cells, map_matrix, rows, cols, &mut rng, display_obstacle) {
             return;
         }
 
@@ -104,19 +105,20 @@ impl Scout {
         rows: u32,
         cols: u32,
         rng: &mut StdRng,
+        display_obstacle: char,
     ) -> bool {
         let min_explore = circle_cells.iter()
-            .filter(|&&(i, j)| map_matrix[i as usize][j as usize].display != '8')
+            .filter(|&&(i, j)| map_matrix[i as usize][j as usize].display != display_obstacle)
             .map(|&(i, j)| map_matrix[i as usize][j as usize].explore)
             .min()
             .unwrap_or(i8::MAX);
 
         let mut best_cells: Vec<(i32, i32)> = circle_cells.iter()
             .cloned()
-            .filter(|&(i, j)| map_matrix[i as usize][j as usize].explore == min_explore && map_matrix[i as usize][j as usize].display != '8')
+            .filter(|&(i, j)| map_matrix[i as usize][j as usize].explore == min_explore && map_matrix[i as usize][j as usize].display != display_obstacle)
             .collect();
 
-        self.attempt_movement(&mut best_cells, map_matrix, rows, cols, rng)
+        self.attempt_movement(&mut best_cells, map_matrix, rows, cols, rng, display_obstacle)
     }
 
     fn try_move_to_any_cell(
@@ -126,13 +128,14 @@ impl Scout {
         rows: u32,
         cols: u32,
         rng: &mut StdRng,
+        display_obstacle: char,
     ) -> bool {
         let mut retry_cells: Vec<(i32, i32)> = circle_cells.iter()
             .cloned()
-            .filter(|&(i, j)| map_matrix[i as usize][j as usize].display != '8')
+            .filter(|&(i, j)| map_matrix[i as usize][j as usize].display != display_obstacle)
             .collect();
 
-        self.attempt_movement(&mut retry_cells, map_matrix, rows, cols, rng)
+        self.attempt_movement(&mut retry_cells, map_matrix, rows, cols, rng, display_obstacle)
     }
 
     fn attempt_movement(
@@ -142,6 +145,7 @@ impl Scout {
         rows: u32,
         cols: u32,
         rng: &mut StdRng,
+        display_obstacle: char,
     ) -> bool {
         while !cells.is_empty() {
             if let Some(&(target_x, target_y)) = cells.choose(rng) {
@@ -151,9 +155,10 @@ impl Scout {
                     map_matrix,
                     rows,
                     cols,
+                    display_obstacle,
                 ) {
                     for &(step_x, step_y) in &path {
-                        if map_matrix[step_x as usize][step_y as usize].display != '8' {
+                        if map_matrix[step_x as usize][step_y as usize].display != display_obstacle {
                             self.move_to(step_x as u32, step_y as u32);
                             return true;
                         }
@@ -195,7 +200,7 @@ fn get_circle_cells(x: i32, y: i32, rows: i32, cols: i32) -> Vec<(i32, i32)> {
     cells
 }
 
-fn find_shortest_path(start: (i32, i32), target: (i32, i32), map_matrix: &Vec<Vec<Cell>>, rows: u32, cols: u32) -> Option<Vec<(i32, i32)>> {
+fn find_shortest_path(start: (i32, i32), target: (i32, i32), map_matrix: &Vec<Vec<Cell>>, rows: u32, cols: u32, display_obstacle: char) -> Option<Vec<(i32, i32)>> {
     let directions = [(1, 0), (-1, 0), (0, 1), (0, -1)];
     let mut queue = VecDeque::new();
     let mut came_from: HashMap<(i32, i32), (i32, i32)> = HashMap::new();
@@ -220,7 +225,7 @@ fn find_shortest_path(start: (i32, i32), target: (i32, i32), map_matrix: &Vec<Ve
             let next_y = y + dy;
 
             if next_x >= 0 && next_x < rows as i32 && next_y >= 0 && next_y < cols as i32 {
-                if map_matrix[next_x as usize][next_y as usize].display != '8' && !came_from.contains_key(&(next_x, next_y)) {
+                if map_matrix[next_x as usize][next_y as usize].display != display_obstacle && !came_from.contains_key(&(next_x, next_y)) {
                     queue.push_back((next_x, next_y));
                     came_from.insert((next_x, next_y), (x, y));
                 }
