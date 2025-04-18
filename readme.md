@@ -105,8 +105,8 @@ docker compose up --build
 - La carte est affichée sous forme de grille.  
 - Icônes utilisées :  
   - 🏰 : Base  
-  - 👷 / 👨‍🌾 : Récolteur  
-  - 🛰️ / 🕵️‍♂️ : Éclaireur  
+  - 👨‍🌾 : Récolteur  
+  - 🤖 : Éclaireur  
   - 💎 : Cristal  
   - ⚡️ : Énergie  
   - 🌳 : Obstacle  
