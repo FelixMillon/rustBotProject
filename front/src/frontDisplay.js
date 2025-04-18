@@ -10,12 +10,15 @@ const FrontDisplay = () => {
     });
     const [speed, setSpeed] = useState(500);
     const [isPaused, setIsPaused] = useState(false);
+    const [showResetPopup, setShowResetPopup] = useState(false);
+
     const [resetValues, setResetValues] = useState({
         columns: 15,
         rows: 15,
         seed: 40,
         gatherers: 3,
         scouts: 7,
+        resources: 15,
         empty_display: ' ',
         obstacle_display: '8',
         base_display: '#',
@@ -34,11 +37,31 @@ const FrontDisplay = () => {
         try {
             await axios.post("http://127.0.0.1:3001/reset", resetValues);
             await fetchGameState();
+            setShowResetPopup(false);
         } catch (error) {
             console.error("Error resetting game:", error);
         }
     };
 
+    const startGame = async () => {
+        try {
+            await axios.post("http://127.0.0.1:3001/start", resetValues);
+            await fetchGameState();
+            setShowResetPopup(false);
+        } catch (error) {
+            console.error("Error starting game:", error);
+        }
+    };
+
+    const stopGame = async () => {
+        try {
+            await axios.post("http://127.0.0.1:3001/stop");
+            await fetchGameState();
+        } catch (error) {
+            console.error("Error stopping game:", error);
+        }
+    };
+    
     useEffect(() => {
         const intervalId = setInterval(() => {
             if (!isPaused) {
@@ -77,7 +100,7 @@ const FrontDisplay = () => {
             case "C": return "💎";
             case "E": return "⚡️";
             case "S": return "🤖";
-            case "G": return "👷";
+            case "G": return "🧑‍🌾";
             case "#": return "🏰";
             default: return "";
         }
@@ -87,17 +110,7 @@ const FrontDisplay = () => {
 
     const handleResetChange = (e) => {
         const { name, value } = e.target;
-        let val = value;
-
-        if (name === 'columns' || name === 'rows') {
-            val = Math.max(15, Math.min(100, parseInt(value)));
-        } else if (name === 'gatherers') {
-            val = Math.max(0, Math.min(5, parseInt(value)));
-        } else if (name === 'scouts') {
-            val = Math.max(1, Math.min(15, parseInt(value)));
-        } else if (name === 'seed') {
-            val = parseInt(value);
-        }
+        let val = parseInt(value);;
 
         setResetValues(prev => ({
             ...prev,
@@ -139,90 +152,97 @@ const FrontDisplay = () => {
                 <p>Crystal: {gameState.crystal_count}</p>
                 <p>Energy: {gameState.energy_count}</p>
 
-
-
                 {/* Bouton Reset */}
-                <button onClick={resetGame} style={{ marginLeft: "10px" }}>
-                    🔄 Reset
+                <button onClick={() => setShowResetPopup(true)} style={{ marginLeft: "10px" }}>
+                    {gameState.map.length === 0 ? "🚀 Start" : "🔄 Reset"}
                 </button>
+                {/* Bouton Stop */}
+                {gameState.map.length > 0 && (
+                    <button onClick={stopGame} style={{ marginLeft: "10px" }}>
+                        🛑 Finish
+                    </button>
+                )}
             </div>
 
             <div style={{ marginTop: "20px", display: "flex", justifyContent: "center", alignItems: "center" }}>
                 <button onClick={decreaseSpeed} style={{ fontSize: "20px", marginLeft: "10px" }}>⏪</button>
-                {/* Boutons Pause/Start */}
                 <button onClick={togglePause} style={{ margin: "0 10px", fontSize: "20px" }}>
                     {isPaused ? "▶️" : "⏸️"}
                 </button>
                 <button onClick={increaseSpeed} style={{ fontSize: "20px", marginRight: "10px" }}>⏩</button>
-                
             </div>
 
-            <div style={{ marginTop: "30px" }}>
-                <h2>Reset Game</h2>
-                <div>
-                    <label>
-                        Columns (min 15 max 100):
-                        <input
-                            type="number"
-                            name="columns"
-                            value={resetValues.columns}
-                            onChange={handleResetChange}
-                            min="15"
-                            max="100"
-                        />
-                    </label>
+            {/* ===================== POPUP ===================== */}
+            {showResetPopup && (
+                <div
+                    style={{
+                        position: "fixed",
+                        top: 0,
+                        left: 0,
+                        width: "100vw",
+                        height: "100vh",
+                        backgroundColor: "rgba(0, 0, 0, 0.5)",
+                        display: "flex",
+                        alignItems: "center",
+                        justifyContent: "center",
+                    }}
+                >
+                    <div
+                        style={{
+                            backgroundColor: "rgba(32, 32, 32, 0.5)",
+                            padding: "30px",
+                            borderRadius: "10px",
+                            minWidth: "300px",
+                            textAlign: "left",
+                        }}
+                    >
+                        <h2>{gameState.map.length === 0 ? "Paramètres de Démarrage" : "Paramètres de Reset"}</h2>
+                        <div>
+                            <label>
+                                Columns (15–100): 
+                                <input type="string" name="columns" value={resetValues.columns} onChange={handleResetChange} />
+                            </label>
+                        </div>
+                        <div>
+                            <label>
+                                Rows (15–100): 
+                                <input type="number" name="rows" value={resetValues.rows} onChange={handleResetChange} />
+                            </label>
+                        </div>
+                        <div>
+                            <label>
+                                Gatherers (0–15): 
+                                <input type="number" name="gatherers" value={resetValues.gatherers} onChange={handleResetChange} />
+                            </label>
+                        </div>
+                        <div>
+                            <label>
+                                Scouts (1–15): 
+                                <input type="number" name="scouts" value={resetValues.scouts} onChange={handleResetChange} />
+                            </label>
+                        </div>
+                        <div>
+                            <label>
+                                Ressources (1-50): 
+                                <input type="number" name="resources" value={resetValues.resources} onChange={handleResetChange} />
+                            </label>
+                        </div>
+                        <div>
+                            <label>
+                                Graine: 
+                                <input type="number" name="seed" value={resetValues.seed} onChange={handleResetChange} />
+                            </label>
+                        </div>
+
+                        <div style={{ marginTop: "20px", display: "flex", justifyContent: "space-between" }}>
+                            <button onClick={gameState.map.length === 0 ? startGame : resetGame}>
+                                ✅ Valider
+                            </button>
+                            <button onClick={() => setShowResetPopup(false)}>❌ Annuler</button>
+                        </div>
+                    </div>
                 </div>
-                <div>
-                    <label>
-                        Rows (min 15 max 100):
-                        <input
-                            type="number"
-                            name="rows"
-                            value={resetValues.rows}
-                            onChange={handleResetChange}
-                            min="15"
-                            max="100"
-                        />
-                    </label>
-                </div>
-                <div>
-                    <label>
-                        Gatherers (0-5):
-                        <input
-                            type="number"
-                            name="gatherers"
-                            value={resetValues.gatherers}
-                            onChange={handleResetChange}
-                            min="0"
-                            max="5"
-                        />
-                    </label>
-                </div>
-                <div>
-                    <label>
-                        Scouts (1-15):
-                        <input
-                            type="number"
-                            name="scouts"
-                            value={resetValues.scouts}
-                            onChange={handleResetChange}
-                            min="1"
-                            max="15"
-                        />
-                    </label>
-                </div>
-                <div>
-                    <label>
-                        Graine:
-                        <input
-                            type="number"
-                            name="seed"
-                            value={resetValues.seed}
-                            onChange={handleResetChange}
-                        />
-                    </label>
-                </div>
-            </div>
+            )}
         </div>
     );
 };

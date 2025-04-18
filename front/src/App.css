@@ -1,42 +1,88 @@
-* {
-  margin: 0;
-  padding: 0;
-  box-sizing: border-box;
-}
+/* App.css */
 
 body {
-  font-family: Arial, sans-serif;
-  background-color: #f4f4f4;
-  display: flex;
-  justify-content: center;
-  align-items: center;
-  height: 100vh;
+    margin: 0;
+    font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+    background-color: #121212;
+    color: #f5f5f5;
 }
 
 h1 {
-  margin-bottom: 20px;
+    margin-top: 20px;
+    color: #ffffff;
 }
 
+button {
+    background-color: #1f1f1f;
+    color: #ffffff;
+    border: 2px solid #333;
+    padding: 10px 20px;
+    border-radius: 10px;
+    font-size: 16px;
+    cursor: pointer;
+    transition: all 0.2s ease-in-out;
+}
+
+button:hover {
+    background-color: #333;
+    transform: scale(1.05);
+}
+
+/* Start/Reset button emphasized */
+.big-action-btn {
+    background-color: #0066ff;
+    font-size: 20px;
+    font-weight: bold;
+    padding: 14px 30px;
+    margin-top: 20px;
+    border: none;
+}
+
+.big-action-btn:hover {
+    background-color: #0052cc;
+}
+
+/* Map grid cells */
 .cell {
-  border: 1px solid #ccc;
-  background-color: #eee;
-}
-.crystal {
-  background-color: cyan;
-}
-.energy {
-  background-color: yellow;
-}
-.scout {
-  background-color: green;
-  color: white;
-}
-.gatherer {
-  background-color: red;
-  color: white;
+    border: 1px solid #2c2c2c;
+    background-color: #1e1e1e;
 }
 
-#resources {
-  font-size: 18px;
-  margin-top: 20px;
+/* Specific cell types */
+.cell.crystal { background-color: #004d66; }
+.cell.energy { background-color: #663300; }
+.cell.scout { background-color: #004400; }
+.cell.gatherer { background-color: #666600; }
+
+/* Modal popup */
+.popup-overlay {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100vw;
+    height: 100vh;
+    background-color: rgba(0,0,0,0.8);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 10;
+}
+
+.popup-content {
+    background-color: #1e1e1e;
+    padding: 30px;
+    border-radius: 15px;
+    min-width: 320px;
+    color: white;
+    box-shadow: 0 0 20px rgba(0, 0, 0, 0.6);
+}
+
+.popup-content input {
+    background-color: #333;
+    color: #f5f5f5;
+    border: none;
+    border-radius: 5px;
+    padding: 5px 10px;
+    margin-left: 10px;
+    width: 80px;
 }
