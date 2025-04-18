@@ -59,6 +59,7 @@ impl Gatherer {
         finded_resources:  Arc<RwLock<Vec<u32>>>,
         gatherer_receiver: Receiver<EventType>,
         map_sender: Sender<EventType>,
+        display_obstacle: char,
     ) {
         let mut log_file = OpenOptions::new()
             .create(true)
@@ -86,7 +87,7 @@ impl Gatherer {
                             self.id
                         )
                         .expect("Failed to write to log file");
-                        let event = self.choose(&finded_resources_copy, &mut resources_copy, seed, &map_matrix_copy, base_loc);
+                        let event = self.choose(&finded_resources_copy, &mut resources_copy, seed, &map_matrix_copy, base_loc, display_obstacle);
                         let _ = map_sender.send(event);
                     }
                     EventType::Collect(recolted) => {
@@ -115,6 +116,7 @@ impl Gatherer {
         seed: u64,
         map_matrix: &Vec<Vec<Cell>>,
         base_loc: Localization,
+        display_obstacle: char,
     ) -> EventType {
     
         let mut log_file = OpenOptions::new()
@@ -126,7 +128,7 @@ impl Gatherer {
         if self.path.as_ref().map_or(true, |p| p.is_empty()) {
             // Si la capacité de l'inventaire est pleine, se rendre à la base.
             if self.inventory.0 + self.inventory.1 >= self.inventory_size {
-                self.seek(map_matrix, base_loc);
+                self.seek(map_matrix, base_loc, display_obstacle);
                 if base_loc.same_loc(&self.loc) {
                     writeln!(
                         log_file,
@@ -155,7 +157,7 @@ impl Gatherer {
                     self.find(finded_resources, resources, seed);
                     if let Some(target_id) = self.target {
                         if let Some(resource) = resources.get(&target_id) {
-                            self.seek(map_matrix, resource.loc);
+                            self.seek(map_matrix, resource.loc, display_obstacle);
                             writeln!(
                                 log_file,
                                 "Gatherer {} cherche une target",
@@ -194,7 +196,7 @@ impl Gatherer {
                                 }
                                 return EventType::Extract(target_id,(10, 1.0));
                             } else {
-                                self.seek(map_matrix, resource.loc);
+                                self.seek(map_matrix, resource.loc, display_obstacle);
                                 writeln!(
                                     log_file,
                                     "Gatherer {} cherche une target",
@@ -240,7 +242,7 @@ impl Gatherer {
         }
     }
 
-    fn seek(&mut self, map_matrix: &Vec<Vec<Cell>>, target: Localization) {
+    fn seek(&mut self, map_matrix: &Vec<Vec<Cell>>, target: Localization, display_obstacle: char) {
         let start = self.loc;
 
         let rows = map_matrix.len();
@@ -289,7 +291,7 @@ impl Gatherer {
                     let new_x = new_x as u32;
                     let new_y = new_y as u32;
 
-                    if !visited.contains(&(new_x, new_y)) && map_matrix[new_x as usize][new_y as usize].display != '8' {
+                    if !visited.contains(&(new_x, new_y)) && map_matrix[new_x as usize][new_y as usize].display != display_obstacle {
                         visited.insert((new_x, new_y));
                         parent_map.insert((new_x, new_y), (x, y));
                         queue.push_back((new_x, new_y));

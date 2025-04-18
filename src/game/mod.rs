@@ -29,6 +29,9 @@ pub struct Game {
     pub map_matrix: Arc<RwLock<Vec<Vec<Cell>>>>,
     pub age: u32,
     pub base: Base,
+    pub display_void: char,
+    pub display_obstacle: char,
+    pub display_base: char,
 }
 
 #[derive(Debug, Clone, Copy)]
@@ -67,7 +70,7 @@ impl Base {
 }
 
 impl Game {
-    pub fn new(rows: u32, cols: u32, seed: u64) -> Self {
+    pub fn new(rows: u32, cols: u32, seed: u64, display_void: char, display_obstacle: char, display_base: char) -> Self {
         let scouts = HashMap::new();
         let scout_senders = HashMap::new();
         let scout_receivers = HashMap::new();
@@ -80,7 +83,7 @@ impl Game {
         for _ in 0..rows {
             let mut row = Vec::new();
             for _ in 0..cols {
-                row.push(Cell { display: ' ', explore: -1 });
+                row.push(Cell { display: display_void, explore: -1 });
             }
             map_matrix.push(row);
         }
@@ -99,6 +102,9 @@ impl Game {
             map_matrix: Arc::new(RwLock::new(map_matrix)),
             age: 0,
             base: Base::new(rows, cols),
+            display_void,
+            display_obstacle,
+            display_base,
         }
     }
 
@@ -117,6 +123,7 @@ impl Game {
             let rows = self.rows;
             let cols = self.cols;
             let seed = self.seed;
+            let display_obstacle = self.display_obstacle;
 
             let mut cloned_scout = scout.clone();
             self.scout_senders.insert(scout.id, scout_sender);
@@ -128,7 +135,7 @@ impl Game {
             }
             thread::spawn(move || {
                 let thread_id = std::thread::current().id();
-                cloned_scout.handle_events(map_matrix, rows, cols, seed, thread_id, scout_receiver, map_sender);
+                cloned_scout.handle_events(map_matrix, rows, cols, seed, thread_id, scout_receiver, map_sender, display_obstacle);
             });
 
         }
@@ -151,7 +158,7 @@ impl Game {
             let finded_resources = Arc::clone(&self.finded_resources);
             let base_loc = self.base.loc;
             let seed = self.seed;
-
+            let display_obstacle = self.display_obstacle;
             let mut cloned_gatherer = gatherer.clone();
             self.gatherer_senders.insert(gatherer.id, gatherer_sender);
             self.gatherer_receivers.insert(gatherer.id, map_receiver);
@@ -162,7 +169,7 @@ impl Game {
             }
             thread::spawn(move || {
                 let thread_id = std::thread::current().id();
-                cloned_gatherer.handle_events(map_matrix, resources, base_loc, seed, finded_resources, gatherer_receiver, map_sender);
+                cloned_gatherer.handle_events(map_matrix, resources, base_loc, seed, finded_resources, gatherer_receiver, map_sender, display_obstacle);
             });
 
         }
@@ -197,7 +204,7 @@ impl Game {
             let map_matrix = self.map_matrix.read().unwrap(); 
             let cell = &map_matrix[x as usize][y as usize];
     
-            if cell.display != '#' && cell.display != '8' {
+            if cell.display != self.display_base && cell.display != self.display_obstacle {
                 let mut is_free = true;
                 let mut resources = self.resources.read().unwrap();
                 for resource in resources.values() {
@@ -339,7 +346,7 @@ impl Game {
         for x in 0..self.rows as usize {
             for y in 0..self.cols as usize {
                 if map_matrix[x][y].explore == -1 {
-                    result_map[x][y].display = ' ';
+                    result_map[x][y].display = self.display_void;
                 }
             }
         }
@@ -355,7 +362,7 @@ impl Game {
                     ResourceKind::Energy => 'E',
                 };
             } else {
-                result_map[x][y].display = ' ';
+                result_map[x][y].display = self.display_void;
             }
         }
 
@@ -415,7 +422,7 @@ impl Game {
             for j in 0..self.cols {
                 let noise_value = perlin.get([i as f64 / scale, j as f64 / scale]);
                 if noise_value > threshold + 0.2 {
-                    map_matrix[i as usize][j as usize].display = '8';
+                    map_matrix[i as usize][j as usize].display = self.display_obstacle;
                 }
             }
         }
@@ -442,14 +449,14 @@ impl Game {
         for i in 0..self.rows {
             for j in 0..self.cols {
                 if safe_zone_noise[i as usize][j as usize] {
-                    map_matrix[i as usize][j as usize].display = ' '; // Zone vide
+                    map_matrix[i as usize][j as usize].display = self.display_void;
                 }
             }
         }
         for i in (center_x - 1) as i32..=(center_x + 1) as i32 {
             for j in (center_y - 1) as i32..=(center_y + 1) as i32 {
                 if i >= 0 && j >= 0 && i < self.rows as i32 && j < self.cols as i32 {
-                    map_matrix[i as usize][j as usize].display = '#';
+                    map_matrix[i as usize][j as usize].display = self.display_base;
                     map_matrix[i as usize][j as usize].explore = 30;
                 }
             }
