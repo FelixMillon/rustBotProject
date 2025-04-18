@@ -1,13 +1,10 @@
 use std::collections::HashMap;
 use std::sync::mpsc::{Sender, Receiver, channel};
-use std::sync::{Arc, RwLock, Mutex};
+use std::sync::{Arc, RwLock};
 use noise::{NoiseFn, Perlin};
 use rand::prelude::*;
 use std::f64;
 use std::thread;
-use std::fs::{create_dir_all, OpenOptions};
-use std::io::Write;
-use std::path::Path;
 use crate::id_generator::IDGenerator;
 use crate::gatherers::*;
 use crate::scouts::*;
@@ -116,7 +113,7 @@ impl Game {
     ) {
         let loc = Localization { x, y };
 
-        if let Some(mut scout) = Scout::new(loc, id_generator) {
+        if let Some(scout) = Scout::new(loc, id_generator) {
             let (map_sender, map_receiver): (Sender<EventType>, Receiver<EventType>) = channel();
             let (scout_sender, scout_receiver): (Sender<EventType>, Receiver<EventType>) = channel();
             let map_matrix = Arc::clone(&self.map_matrix);
@@ -129,13 +126,8 @@ impl Game {
             self.scout_senders.insert(scout.id, scout_sender);
             self.scout_receivers.insert(scout.id, map_receiver);
             self.scouts.insert(scout.id, scout);
-            let log_dir = Path::new("logs");
-            if !log_dir.exists() {
-                create_dir_all(log_dir).expect("Failed to create log directory");
-            }
             thread::spawn(move || {
-                let thread_id = std::thread::current().id();
-                cloned_scout.handle_events(map_matrix, rows, cols, seed, thread_id, scout_receiver, map_sender, display_obstacle);
+                cloned_scout.handle_events(map_matrix, rows, cols, seed, scout_receiver, map_sender, display_obstacle);
             });
 
         }
@@ -163,12 +155,7 @@ impl Game {
             self.gatherer_senders.insert(gatherer.id, gatherer_sender);
             self.gatherer_receivers.insert(gatherer.id, map_receiver);
             self.gatherers.insert(gatherer.id, gatherer);
-            let log_dir = Path::new("logs");
-            if !log_dir.exists() {
-                create_dir_all(log_dir).expect("Failed to create log directory");
-            }
             thread::spawn(move || {
-                let thread_id = std::thread::current().id();
                 cloned_gatherer.handle_events(map_matrix, resources, base_loc, seed, finded_resources, gatherer_receiver, map_sender, display_obstacle);
             });
 
@@ -206,7 +193,7 @@ impl Game {
     
             if cell.display != self.display_base && cell.display != self.display_obstacle {
                 let mut is_free = true;
-                let mut resources = self.resources.read().unwrap();
+                let resources = self.resources.read().unwrap();
                 for resource in resources.values() {
                     if resource.loc.x == x && resource.loc.y == y {
                         is_free = false;
@@ -322,16 +309,6 @@ impl Game {
                     }
                 }
             }
-            // let map_matrix = self.map_matrix.read().unwrap();
-            // let finded_resources = &self.finded_resources;
-            // let resources = &mut self.resources;
-            // let base = &mut self.base;
-
-            // // for gatherer in self.gatherers.values_mut() {
-            // //     gatherer.choose(finded_resources, resources, self.seed, &map_matrix, base);
-            // // }
-    
-            // drop(map_matrix);
             self.clear_empty_resources();
             self.decay_passage_counters();
             self.update_explore_matrix();
@@ -351,7 +328,7 @@ impl Game {
             }
         }
 
-        let mut resources = self.resources.read().unwrap();
+        let resources = self.resources.read().unwrap();
 
         for (_, resource) in resources.iter() {
             let x = resource.loc.x as usize;
@@ -413,7 +390,6 @@ impl Game {
     pub fn generate_map_obstacles(&mut self) {
         let perlin = Perlin::new();
         let scale = ((self.rows + self.cols) as f64) / 10.0;
-        let mut rng = StdRng::seed_from_u64(self.seed);
     
         let mut map_matrix = self.map_matrix.write().unwrap();
         let threshold = perlin.get([self.seed as f64 / 100.0, self.seed as f64 / 100.0]);
