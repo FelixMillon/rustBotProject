@@ -7,7 +7,6 @@ use crate::events::*;
 use crate::resources::*;
 use crate::game::{Localization, Cell};
 
-#[derive(Clone,Debug)]
 pub struct Gatherer {
     pub id: u32,
     pub loc: Localization,

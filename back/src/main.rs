@@ -30,6 +30,8 @@ struct ResetRequest {
     empty_display: Option<char>,
     obstacle_display: Option<char>,
     base_display: Option<char>,
+    scout_display: Option<char>,
+    gatherer_display: Option<char>,
 }
 
 #[derive(Serialize)]
@@ -39,9 +41,21 @@ struct StateResponse {
     energy_count: u16,
 }
 
-fn create_new_game(rows: u32, columns: u32, seed: u64, gatherers: u8, scouts: u8, resources: u8, empty_display: char, obstacle_display: char, base_display: char) -> Game {
+fn create_new_game(
+    rows: u32,
+    columns: u32,
+    seed: u64,
+    gatherers: u8,
+    scouts: u8,
+    resources: u8,
+    empty_display: char,
+    obstacle_display: char,
+    base_display: char,
+    scout_display: char,
+    gatherer_display: char
+) -> Game {
     let mut id_generator = id_generator::IDGenerator::new();
-    let mut map = Game::new(rows, columns, seed, empty_display, obstacle_display, base_display);
+    let mut map = Game::new(rows, columns, seed, empty_display, obstacle_display, base_display,scout_display,gatherer_display);
     map.generate_map_obstacles();
     map.generate_resources(&mut id_generator, resources);
     
@@ -113,6 +127,8 @@ async fn main() {
                             body.empty_display.unwrap_or(' '),
                             body.obstacle_display.unwrap_or('8'),
                             body.base_display.unwrap_or('#'),
+                            body.scout_display.unwrap_or('S'),
+                            body.gatherer_display.unwrap_or('G'),
                         ));
                         Json("Game started.")
                     } else {
@@ -136,6 +152,8 @@ async fn main() {
                         body.empty_display.unwrap_or(' '),
                         body.obstacle_display.unwrap_or('8'),
                         body.base_display.unwrap_or('#'),
+                        body.scout_display.unwrap_or('S'),
+                        body.gatherer_display.unwrap_or('G'),
                     );
         
                     *map.lock().unwrap() = Some(new_game);

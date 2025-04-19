@@ -7,7 +7,6 @@ use crate::id_generator::IDGenerator;
 use crate::events::*;
 use crate::game::{Localization, Cell};
 
-#[derive(Clone,Debug)]
 pub struct Scout {
     pub id: u32,
     pub loc: Localization,

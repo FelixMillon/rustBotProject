@@ -15,12 +15,9 @@ pub struct Game {
     pub cols: u32,
     pub rows: u32,
     pub seed: u64,
-    pub scouts: HashMap<u32, Scout>,
-    pub scout_senders: HashMap<u32, Sender<EventType>>,
-    pub scout_receivers: HashMap<u32, Receiver<EventType>>,
-    pub gatherer_senders: HashMap<u32, Sender<EventType>>,
-    pub gatherer_receivers: HashMap<u32, Receiver<EventType>>,
-    pub gatherers: HashMap<u32, Gatherer>,
+    pub robots: HashMap<u32, Robot>,
+    pub senders: HashMap<u32, Sender<EventType>>,
+    pub receivers: HashMap<u32, Receiver<EventType>>,
     pub resources: Arc<RwLock<HashMap<u32, Resource>>>,
     pub finded_resources: Arc<RwLock<Vec<u32>>>,
     pub map_matrix: Arc<RwLock<Vec<Vec<Cell>>>>,
@@ -29,6 +26,18 @@ pub struct Game {
     pub display_void: char,
     pub display_obstacle: char,
     pub display_base: char,
+    pub display_scout: char,
+    pub display_gatherer: char,
+}
+
+enum Nature {
+    Gatherer,
+    Scout
+}
+
+struct Robot {
+    nature: Nature,
+    loc: Localization
 }
 
 #[derive(Debug, Clone, Copy)]
@@ -43,6 +52,7 @@ pub struct Localization {
     pub x: u32,
     pub y: u32,
 }
+
 impl Localization {
     pub fn same_loc(&self, other: &Localization) -> bool {
         self.x == other.x && self.y == other.y
@@ -67,13 +77,10 @@ impl Base {
 }
 
 impl Game {
-    pub fn new(rows: u32, cols: u32, seed: u64, display_void: char, display_obstacle: char, display_base: char) -> Self {
-        let scouts = HashMap::new();
-        let scout_senders = HashMap::new();
-        let scout_receivers = HashMap::new();
-        let gatherers = HashMap::new();
-        let gatherer_senders = HashMap::new();
-        let gatherer_receivers = HashMap::new();
+    pub fn new(rows: u32, cols: u32, seed: u64, display_void: char, display_obstacle: char, display_base: char, display_scout: char, display_gatherer: char) -> Self {
+        let robots = HashMap::new();
+        let senders = HashMap::new();
+        let receivers = HashMap::new();
         let resources = HashMap::new();
         let mut map_matrix = Vec::new();
         let finded_resources = Vec::new();
@@ -88,12 +95,9 @@ impl Game {
             rows,
             cols,
             seed,
-            scouts,
-            scout_senders,
-            scout_receivers,
-            gatherers,
-            gatherer_senders,
-            gatherer_receivers,
+            robots,
+            senders,
+            receivers,
             resources: Arc::new(RwLock::new(resources)),
             finded_resources: Arc::new(RwLock::new(finded_resources)),
             map_matrix: Arc::new(RwLock::new(map_matrix)),
@@ -102,6 +106,8 @@ impl Game {
             display_void,
             display_obstacle,
             display_base,
+            display_scout,
+            display_gatherer,
         }
     }
 
@@ -113,7 +119,7 @@ impl Game {
     ) {
         let loc = Localization { x, y };
 
-        if let Some(scout) = Scout::new(loc, id_generator) {
+        if let Some(mut scout) = Scout::new(loc, id_generator) {
             let (map_sender, map_receiver): (Sender<EventType>, Receiver<EventType>) = channel();
             let (scout_sender, scout_receiver): (Sender<EventType>, Receiver<EventType>) = channel();
             let map_matrix = Arc::clone(&self.map_matrix);
@@ -122,12 +128,16 @@ impl Game {
             let seed = self.seed;
             let display_obstacle = self.display_obstacle;
 
-            let mut cloned_scout = scout.clone();
-            self.scout_senders.insert(scout.id, scout_sender);
-            self.scout_receivers.insert(scout.id, map_receiver);
-            self.scouts.insert(scout.id, scout);
+            self.senders.insert(scout.id, scout_sender);
+            self.receivers.insert(scout.id, map_receiver);
+            self.robots.insert(
+                scout.id, Robot {
+                    nature: Nature::Scout,
+                    loc: scout.loc,
+                }
+            );
             thread::spawn(move || {
-                cloned_scout.handle_events(map_matrix, rows, cols, seed, scout_receiver, map_sender, display_obstacle);
+                scout.handle_events(map_matrix, rows, cols, seed, scout_receiver, map_sender, display_obstacle);
             });
 
         }
@@ -141,7 +151,7 @@ impl Game {
     ) {
         let loc = Localization { x, y };
 
-        if let Some(gatherer) = Gatherer::new(loc, id_generator) {
+        if let Some(mut gatherer) = Gatherer::new(loc, id_generator) {
             let (map_sender, map_receiver): (Sender<EventType>, Receiver<EventType>) = channel();
             let (gatherer_sender, gatherer_receiver): (Sender<EventType>, Receiver<EventType>) = channel();
             let map_matrix = Arc::clone(&self.map_matrix);
@@ -151,12 +161,16 @@ impl Game {
             let base_loc = self.base.loc;
             let seed = self.seed;
             let display_obstacle = self.display_obstacle;
-            let mut cloned_gatherer = gatherer.clone();
-            self.gatherer_senders.insert(gatherer.id, gatherer_sender);
-            self.gatherer_receivers.insert(gatherer.id, map_receiver);
-            self.gatherers.insert(gatherer.id, gatherer);
+            self.senders.insert(gatherer.id, gatherer_sender);
+            self.receivers.insert(gatherer.id, map_receiver);
+            self.robots.insert(gatherer.id,
+                Robot {
+                    nature: Nature::Gatherer,
+                    loc: gatherer.loc,
+                }
+            );
             thread::spawn(move || {
-                cloned_gatherer.handle_events(map_matrix, resources, base_loc, seed, finded_resources, gatherer_receiver, map_sender, display_obstacle);
+                gatherer.handle_events(map_matrix, resources, base_loc, seed, finded_resources, gatherer_receiver, map_sender, display_obstacle);
             });
 
         }
@@ -216,23 +230,28 @@ impl Game {
         let mut map_matrix = self.map_matrix.write().unwrap();
         let mut finded_resources = self.finded_resources.write().unwrap();
         
-        for scout in self.scouts.values() {
-            let x = scout.loc.x as i32;
-            let y = scout.loc.y as i32;
-            for delta_x in -1..=1 {
-                for delta_y in -1..=1 {
-                    let dx = x + delta_x;
-                    let dy = y + delta_y;
-
-                    if dx >= 0 && dx < self.rows as i32 && dy >= 0 && dy < self.cols as i32 {
-                        map_matrix[dx as usize][dy as usize].explore = 30;
-                        if let Some(resource) = self.find_resource_by_loc(dx as u32, dy as u32) {
-                            if !finded_resources.contains(&resource.id) {
-                                finded_resources.push(resource.id);
+        for robot in self.robots.values() {
+            match robot.nature {
+                Nature::Scout => {
+                    let x = robot.loc.x as i32;
+                    let y = robot.loc.y as i32;
+                    for delta_x in -1..=1 {
+                        for delta_y in -1..=1 {
+                            let dx = x + delta_x;
+                            let dy = y + delta_y;
+    
+                            if dx >= 0 && dx < self.rows as i32 && dy >= 0 && dy < self.cols as i32 {
+                                map_matrix[dx as usize][dy as usize].explore = 30;
+                                if let Some(resource) = self.find_resource_by_loc(dx as u32, dy as u32) {
+                                    if !finded_resources.contains(&resource.id) {
+                                        finded_resources.push(resource.id);
+                                    }
+                                }
                             }
                         }
                     }
                 }
+                _ => {}
             }
         }
     }
@@ -267,30 +286,17 @@ impl Game {
         if let EventType::Tick = event {
             self.age += 1;
     
-            for tx in self.scout_senders.values() {
-                let _ = tx.send(EventType::Tick);
-            }
-
-            for tx in self.gatherer_senders.values() {
+            for tx in self.senders.values() {
                 let _ = tx.send(EventType::Tick);
             }
     
-            for (id, rx) in self.scout_receivers.iter() {
-                if let Ok(response) = rx.recv() {
-                    if let EventType::Moved(new_loc) = response {
-                        if let Some(scout) = self.scouts.get_mut(id) {
-                            scout.loc = new_loc;
-                        }
-                    }
-                }
-            }
-            for (id, rx) in self.gatherer_receivers.iter() {
+            for (id, rx) in self.receivers.iter() {
                 if let Ok(response) = rx.recv() {
                     match response {
                         EventType::Moved(new_loc) => {
-                            if let Some(gatherer) = self.gatherers.get_mut(id) {
-                                gatherer.loc = new_loc;
-                            }
+                            if let Some(robot) = self.robots.get_mut(id) {
+                                robot.loc = new_loc;
+                            } 
                         }
                         EventType::Deposit((cristal, energy)) => {
                             self.base.crystal += cristal;
@@ -299,7 +305,7 @@ impl Game {
                         EventType::Extract(resource_id, (requested, rate)) => {
                             if let Some(resource) = self.resources.write().unwrap().get_mut(&resource_id) {
                                 let extracted = resource.gather(requested, rate);
-                                if let Some(sender) = self.gatherer_senders.get(&id) {
+                                if let Some(sender) = self.senders.get(&id) {
                                     let _ = sender.send(EventType::Collect(extracted));
                                 }
                             }
@@ -343,19 +349,15 @@ impl Game {
             }
         }
 
-        for (_, scout) in &self.scouts {
-            let x = scout.loc.x as usize;
-            let y = scout.loc.y as usize;
-    
-            result_map[x][y].display = scout.display;
+        for (_, robot) in &self.robots {
+            let x = robot.loc.x as usize;
+            let y = robot.loc.y as usize;
+            match robot.nature {
+                Nature::Scout =>  result_map[x][y].display = self.display_scout,
+                Nature::Gatherer => result_map[x][y].display = self.display_gatherer,
+            }
+            
         }
-        for (_, gatherer) in &self.gatherers {
-            let x = gatherer.loc.x as usize;
-            let y = gatherer.loc.y as usize;
-    
-            result_map[x][y].display = gatherer.display;
-        }
-
         result_map
     }
 

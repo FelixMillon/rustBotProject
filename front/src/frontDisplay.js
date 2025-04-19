@@ -22,6 +22,8 @@ const FrontDisplay = () => {
         empty_display: ' ',
         obstacle_display: '8',
         base_display: '#',
+        scout_display: 'S',
+        gatherer_display: 'G'
     });
 
     const fetchGameState = async () => {
