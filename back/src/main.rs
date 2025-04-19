@@ -4,10 +4,13 @@ use axum::{
     routing::post,
     response::Json,
     extract::Json as AxumJson,
+    extract::Path,
 };
 use tower_http::cors::{Any, CorsLayer};
 use std::net::SocketAddr;
 use std::sync::{Arc, Mutex};
+use std::collections::HashMap;
+use uuid::Uuid;
 use game::Game;
 use events::EventType;
 use serde::{Deserialize, Serialize};
@@ -18,6 +21,9 @@ mod scouts;
 mod resources;
 mod id_generator;
 mod events;
+
+
+type SharedGames = Arc<Mutex<HashMap<String, Game>>>;
 
 #[derive(Deserialize)]
 struct ResetRequest {
@@ -72,7 +78,7 @@ fn create_new_game(
 
 #[tokio::main]
 async fn main() {
-    let map: Arc<Mutex<Option<Game>>> = Arc::new(Mutex::new(None));
+    let games: Arc<Mutex<HashMap<String, Game>>> = Arc::new(Mutex::new(HashMap::new()));
 
     let cors = CorsLayer::new()
         .allow_origin(Any)
@@ -80,16 +86,14 @@ async fn main() {
         .allow_headers(Any);
 
     let app = Router::new()
-        .route("/state", get({
-            let map = Arc::clone(&map);
-            move || {
-                let map = Arc::clone(&map);
+        .route("/state/:id", get({
+            let games = Arc::clone(&games);
+            move |Path(id): Path<String>| {
+                let games = Arc::clone(&games);
                 async move {
-                    let mut guard = map.lock().unwrap();
-        
-                    if let Some(ref mut game) = *guard {
+                    let mut map = games.lock().unwrap();
+                    if let Some(game) = map.get_mut(&id) {
                         game.handle_event(EventType::Tick);
-        
                         let response = StateResponse {
                             map: game.generate_display().iter().map(|row| {
                                 row.iter().map(|cell| cell.display).collect::<Vec<_>>()
@@ -97,7 +101,6 @@ async fn main() {
                             crystal_count: game.base.crystal,
                             energy_count: game.base.energy,
                         };
-        
                         Json(response)
                     } else {
                         Json(StateResponse {
@@ -110,37 +113,49 @@ async fn main() {
             }
         }))
         .route("/start", post({
-            let map = Arc::clone(&map);
+            let games = Arc::clone(&games);
             move |AxumJson(body): AxumJson<ResetRequest>| {
-                let map = Arc::clone(&map);
+                let games = Arc::clone(&games);
                 async move {
-                    let mut guard = map.lock().unwrap();
-        
-                    if guard.is_none() {
-                        *guard = Some(create_new_game(
-                            body.rows.clamp(15, 200),
-                            body.columns.clamp(15, 200),
-                            body.seed,
-                            body.gatherers.clamp(0, 15),
-                            body.scouts.clamp(1, 15),
-                            body.resources.clamp(1, 50),
-                            body.empty_display.unwrap_or(' '),
-                            body.obstacle_display.unwrap_or('8'),
-                            body.base_display.unwrap_or('#'),
-                            body.scout_display.unwrap_or('S'),
-                            body.gatherer_display.unwrap_or('G'),
-                        ));
-                        Json("Game started.")
-                    } else {
-                        Json("Game is already running.")
+                    let game_id = Uuid::new_v4().to_string();
+                    let new_game = create_new_game(
+                        body.rows.clamp(15, 200),
+                        body.columns.clamp(15, 200),
+                        body.seed,
+                        body.gatherers.clamp(0, 15),
+                        body.scouts.clamp(1, 15),
+                        body.resources.clamp(1, 50),
+                        body.empty_display.unwrap_or(' '),
+                        body.obstacle_display.unwrap_or('8'),
+                        body.base_display.unwrap_or('#'),
+                        body.scout_display.unwrap_or('S'),
+                        body.gatherer_display.unwrap_or('G'),
+                    );
+                    {
+                        let mut map_guard = games.lock().unwrap();
+                        map_guard.insert(game_id.clone(), new_game);
                     }
+                    let games_clone = Arc::clone(&games);
+                    let id_clone = game_id.clone();
+                    tokio::spawn(async move {
+                        loop {
+                            tokio::time::sleep(std::time::Duration::from_secs(1)).await;
+                            let mut map = games_clone.lock().unwrap();
+                            if let Some(game) = map.get_mut(&id_clone) {
+                                game.handle_event(EventType::Tick);
+                            } else {
+                                break;
+                            }
+                        }
+                    });
+                    Json(game_id)
                 }
             }
         }))
-        .route("/reset", post({
-            let map = Arc::clone(&map);
-            move |AxumJson(body): AxumJson<ResetRequest>| {
-                let map = Arc::clone(&map);
+        .route("/reset/:id", post({
+            let games = Arc::clone(&games);
+            move |Path(id): Path<String>, AxumJson(body): AxumJson<ResetRequest>| {
+                let games = Arc::clone(&games);
                 async move {
                     let new_game = create_new_game(
                         body.rows.clamp(15, 200),
@@ -155,20 +170,27 @@ async fn main() {
                         body.scout_display.unwrap_or('S'),
                         body.gatherer_display.unwrap_or('G'),
                     );
-        
-                    *map.lock().unwrap() = Some(new_game);
-                    Json("Game has been reset.")
+                    let mut map = games.lock().unwrap();
+                    if map.contains_key(&id) {
+                        map.insert(id.clone(), new_game);
+                        Json("Game has been reset.")
+                    } else {
+                        Json("Invalid game ID.")
+                    }
                 }
             }
         }))
-        .route("/stop", post({
-            let map = Arc::clone(&map);
-            move || {
-                let map = Arc::clone(&map);
+        .route("/stop/:id", post({
+            let games = Arc::clone(&games);
+            move |Path(id): Path<String>| {
+                let games = Arc::clone(&games);
                 async move {
-                    let mut guard = map.lock().unwrap();
-                    *guard = None;
-                    Json("Game stopped and state cleared.")
+                    let mut map = games.lock().unwrap();
+                    if map.remove(&id).is_some() {
+                        Json("Game stopped and state cleared.")
+                    } else {
+                        Json("Invalid game ID.")
+                    }
                 }
             }
         }))

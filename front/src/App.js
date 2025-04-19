@@ -1,13 +1,8 @@
 import React from "react";
-import FrontDisplay from "./frontDisplay";
-import "./App.css";
+import MultiGamePage from "./MultiGamePage";
 
 function App() {
-    return (
-        <div className="App">
-            <FrontDisplay />
-        </div>
-    );
+    return <MultiGamePage />;
 }
 
 export default App;

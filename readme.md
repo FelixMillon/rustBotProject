@@ -75,14 +75,14 @@ docker compose up --build
   
 ## 📡 Endpoints API (Rust / Axum)  
   
-| Méthode | Endpoint   | Description                                         |
-|---------|------------|-----------------------------------------------------|
-| GET     | `/state`   | Récupère l'état actuel de la partie                 |
-| POST    | `/start`   | Démarre une nouvelle partie                         |
-| POST    | `/reset`   | Réinitialise la partie avec de nouveaux paramètres  |
-| POST    | `/stop`    | Stoppe la partie en cours                           |
+| Méthode | Endpoint     | Description                                                           |
+|---------|--------------|-----------------------------------------------------------------------|
+| GET     | `/state/:ID` | Récupère l'état actuel de la partie                                   |
+| POST    | `/start`     | Démarre une nouvelle partie et retourne l'ID de cette partie          |
+| POST    | `/reset/:ID` | Réinitialise la partie ciblée avec de nouveaux paramètres             |
+| POST    | `/stop/:ID`  | Stoppe la partie ciblé                                                |
   
-### Exemple de payload `/reset` ou `/start` :  
+### Exemple de payload `/reset/:ID` ou `/start` :  
   
 ```json
 {
@@ -94,7 +94,9 @@ docker compose up --build
   "seed": 123,
   "empty_display": " ",
   "obstacle_display": "8",
-  "base_display": "#"
+  "base_display": "#",
+  "scout_display": "S",
+  "gatherer_display": "G"
 }
 ```  
   
@@ -140,6 +142,7 @@ cargo test
 - ✅ Simulation basique en temps réel  
 - ✅ Gestion multi-agents (scouts / gatherers)  
 - ✅ Interface visuelle dynamique  
+- ✅ Gestion multi parties  
 - ⏳ IA des agents plus avancée  
 - ⏳ Animation frontend  
 - ⏳ Persistence via base de données  
@@ -153,7 +156,3 @@ cargo test
 - 🛠️ Contributions bienvenues !  
   
 ---  
-  
-## 📜 Licence  
-  
-Ce projet est sous licence MIT. Voir le fichier `LICENSE` pour plus d'informations.  
