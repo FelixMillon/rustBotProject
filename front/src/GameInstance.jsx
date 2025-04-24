@@ -1,4 +1,6 @@
 import React, { useEffect, useState } from "react";
+import { Canvas } from "@react-three/fiber";
+import { OrbitControls, Stats, useGLTF } from "@react-three/drei";
 import axios from "axios";
 import "./App.css";
 
@@ -13,9 +15,150 @@ const GameInstance = () => {
     const [showResetPopup, setShowResetPopup] = useState(false);
     const [gameId, setGameId] = useState(null);
 
+    const Base = ({ position }) => {
+        return (
+            <group position={position}>
+                {/* Corps de la maison */}
+                <mesh position={[0, 0.75, 0]}>
+                    <boxGeometry args={[2, 1.4, 2]} />
+                    <meshStandardMaterial color="#b5651d" />
+                </mesh>
+    
+                {/* Toit */}
+                <mesh position={[0, 1.85, 0]}  rotation={[0, Math.PI / 4, 0]}>
+                    <coneGeometry args={[1.6, 1, 4]} />
+                    <meshStandardMaterial color="#8b0000" />
+                </mesh>
+
+            </group>
+        );
+    };
+    const Tree = ({ position }) => {
+        return (
+            <group position={position}>
+                {/* Tronc */}
+                <mesh position={[0, 0.5, 0]}>
+                    <cylinderGeometry args={[0.2, 0.2, 1, 16]} />
+                    <meshStandardMaterial color="#8B4513" />
+                </mesh>
+    
+                {/* Feuillage */}
+                <mesh position={[0, 1.3, 0]}>
+                    <sphereGeometry args={[0.6, 32, 32]} />
+                    <meshStandardMaterial color="green" />
+                </mesh>
+            </group>
+        );
+    };
+
+    const Robot = ({ position, color = "#cccccc" }) => {
+        return (
+            <group position={position}>
+
+                <mesh position={[0, 0.625, 0]}>
+                    <boxGeometry args={[0.5, 0.75, 0.3]} />
+                    <meshStandardMaterial color={color} />
+                </mesh>
+        
+                <mesh position={[0, 1.15, 0]}>
+                    <boxGeometry args={[0.4, 0.4, 0.4]} />
+                    <meshStandardMaterial color={color} />
+                </mesh>
+        
+                <mesh position={[-0.4, 0.625, 0]}>
+                    <cylinderGeometry args={[0.05, 0.05, 0.5, 16]} />
+                    <meshStandardMaterial color="#666" />
+                </mesh>
+        
+                <mesh position={[0.4, 0.625, 0]}>
+                    <cylinderGeometry args={[0.05, 0.05, 0.5, 16]} />
+                    <meshStandardMaterial color="#666" />
+                </mesh>
+        
+                <mesh position={[-0.15, 0.125, 0]}>
+                    <cylinderGeometry args={[0.075, 0.075, 0.25, 16]} />
+                    <meshStandardMaterial color="#333" />
+                </mesh>
+        
+                <mesh position={[0.15, 0.125, 0]}>
+                    <cylinderGeometry args={[0.075, 0.075, 0.25, 16]} />
+                    <meshStandardMaterial color="#333" />
+                </mesh>
+            </group>
+        );
+    };
+
+    const Crystal = ({ position, color = "cyan" }) => {
+        return (
+            <group position={position}>
+                {/* Cristal de base */}
+                <mesh position={[0, 1, 0]}>
+                    <coneGeometry args={[0.6, 1.5, 4]} />
+                    <meshStandardMaterial color={color} roughness={0.2} metalness={0.5} transparent={true} opacity={0.8} />
+                </mesh>
+                
+                {/* Cône 1 - Direction 1 */}
+                <mesh position={[0, 1, 0.6]} rotation={[Math.PI / 4, Math.PI / 4, 0]}>
+                    <coneGeometry args={[0.4, 1.5, 4]} />
+                    <meshStandardMaterial color={color} roughness={0.2} metalness={0.5} transparent={true} opacity={0.8} />
+                </mesh>
+                {/* Cône 2 - Direction 2 */}
+                <mesh position={[0, 1, -0.5]} rotation={[-Math.PI / 5, Math.PI / 4, 0]}>
+                    <coneGeometry args={[0.3, 1, 4]} />
+                    <meshStandardMaterial color={color} roughness={0.2} metalness={0.5} transparent={true} opacity={0.8} />
+                </mesh>
+                {/* Cône 2 - Direction 2 */}
+                <mesh position={[0, 1, 0.3]} rotation={[Math.PI / 5, Math.PI / 4, 0]}>
+                    <coneGeometry args={[0.2, 1, 4]} />
+                    <meshStandardMaterial color={color} roughness={0.2} metalness={0.5} transparent={true} opacity={0.8} />
+                </mesh>
+            </group>
+        );
+    };
+    const Lightning = ({ position, color = "yellow" }) => {
+        return (
+            <group position={position}>
+                {/* Premier segment du haut */}
+                <mesh position={[0, 2.7, 0]} rotation={[Math.PI / 4, 0, 0]}>
+                    <cylinderGeometry args={[0.05, 0.1, 1, 8]} />
+                    <meshStandardMaterial color={color} emissive={color} emissiveIntensity={0.8} />
+                </mesh>
+    
+                {/* Deuxième segment, un peu plus bas */}
+                <mesh position={[0, 1.9, 0]} rotation={[-Math.PI / 6, 0, 0]}>
+                    <cylinderGeometry args={[0.05, 0.1, 1, 8]} />
+                    <meshStandardMaterial color={color} emissive={color} emissiveIntensity={0.8} />
+                </mesh>
+    
+                {/* Troisième segment */}
+                <mesh position={[0, 1.1, 0]} rotation={[Math.PI / 6, 0, 0]}>
+                    <cylinderGeometry args={[0.05, 0.1, 1, 8]} />
+                    <meshStandardMaterial color={color} emissive={color} emissiveIntensity={0.8} />
+                </mesh>
+    
+                {/* Quatrième segment, presque au bas */}
+                <mesh position={[0, 0.3, 0]} rotation={[-Math.PI / 4, 0, 0]}>
+                    <cylinderGeometry args={[0.05, 0.1, 1, 8]} />
+                    <meshStandardMaterial color={color} emissive={color} emissiveIntensity={0.8} />
+                </mesh>
+            </group>
+        );
+    };
+    const CellMesh = ({ x, y, type }) => {
+        let color = "#333";
+    
+        switch (type) {
+            case "8": return <Tree position={[x, 0, y]} />;
+            case "C": return <Crystal position={[x, -0.4, y]}/>;
+            case "E": return <Lightning position={[x, 0, y]}/>;
+            case "S": return <Robot position={[x, 0, y]} color="lime" />;
+            case "G": return <Robot position={[x, 0, y]} color="purple" />;
+            case "#": return <Base position={[x, 0, y]}/>;
+        }
+    };
     const [resetValues, setResetValues] = useState({
-        columns: 15,
-        rows: 15,
+        columns: 25,
+        rows: 25,
         seed: 40,
         gatherers: 3,
         scouts: 7,
@@ -120,31 +263,25 @@ const GameInstance = () => {
     return (
         <div className="game-instance">
             <h3>Instance de jeu</h3>
-            <div
-                className="map-grid"
-                style={{
-                    display: "grid",
-                    gridTemplateColumns: `repeat(${gameState.map[0]?.length || 1}, 20px)`,
-                    justifyContent: "center",
-                    margin: "auto",
-                }}
-            >
-                {flatMap.map((cell, index) => (
-                    <div
-                        key={index}
-                        className={getCellClass(cell)}
-                        style={{
-                            width: "20px",
-                            height: "20px",
-                            display: "flex",
-                            alignItems: "center",
-                            justifyContent: "center",
-                            fontSize: "14px",
-                        }}
-                    >
-                        {getCellIcon(cell)}
-                    </div>
-                ))}
+            <div style={{ width: "100%", height: "500px" }}>
+                <Canvas camera={{ position: [10, 20, 10], fov: 100 }}>
+                    <ambientLight intensity={0.5} />
+                    <directionalLight position={[10, 10, 5]} intensity={1} />
+                    <OrbitControls />
+
+                    {/* Sol */}
+                    <mesh receiveShadow position={[resetValues.columns / 2, -0.25, resetValues.rows / 2]}>
+                        <boxGeometry args={[resetValues.columns, 0.5, resetValues.rows]} />
+                        <meshStandardMaterial color="#388E3C" />
+                    </mesh>
+
+                    {/* Grille 3D */}
+                    {gameState.map.map((row, y) =>
+                        row.map((cell, x) => (
+                            <CellMesh key={`${x}-${y}`} x={x} y={y} type={cell} />
+                        ))
+                    )}
+                </Canvas>
             </div>
 
             <p>💎 Crystal: {gameState.crystal_count}</p>
