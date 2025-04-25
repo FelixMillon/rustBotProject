@@ -1,10 +1,13 @@
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useState, forwardRef, useImperativeHandle } from "react";
 import { Canvas } from "@react-three/fiber";
 import { OrbitControls, Stats, useGLTF } from "@react-three/drei";
 import axios from "axios";
 import "./App.css";
 
-const GameInstance = () => {
+const GameInstance = forwardRef((props, ref) => {
+    useImperativeHandle(ref, () => ({
+        stopGame
+    }));
     const [gameState, setGameState] = useState({
         map: [],
         crystal_count: 0,
@@ -263,30 +266,6 @@ const GameInstance = () => {
     return (
         <div className="game-instance">
             <h3>Instance de jeu</h3>
-            <div style={{ width: "100%", height: "500px" }}>
-                <Canvas camera={{ position: [30, 20, 30], fov: 100 }}>
-                    <ambientLight intensity={0.5} />
-                    <directionalLight position={[10, 10, 5]} intensity={1} />
-                    <OrbitControls />
-
-                    {/* Sol */}
-                    <mesh receiveShadow position={[resetValues.columns / 2, -0.25, resetValues.rows / 2]}>
-                        <boxGeometry args={[resetValues.columns, 0.5, resetValues.rows]} />
-                        <meshStandardMaterial color="#388E3C" />
-                    </mesh>
-
-                    {/* Grille 3D */}
-                    {gameState.map.map((row, y) =>
-                        row.map((cell, x) => (
-                            <CellMesh key={`${x}-${y}`} x={x} y={y} type={cell} />
-                        ))
-                    )}
-                </Canvas>
-            </div>
-
-            <p>💎 Crystal: {gameState.crystal_count}</p>
-            <p>⚡️ Energy: {gameState.energy_count}</p>
-
             <div>
                 <button onClick={() => setShowResetPopup(true)}>
                     {gameState.map.length === 0 ? "🚀 Start" : "🔄 Reset"}
@@ -318,8 +297,29 @@ const GameInstance = () => {
                     </div>
                 </div>
             )}
+            <p>💎 Crystal: {gameState.crystal_count} ⚡️ Energy: {gameState.energy_count}</p>
+            <div classname="map-container">
+                <Canvas camera={{ position: [30, 20, 30], fov: 100 }}>
+                    <ambientLight intensity={0.5} />
+                    <directionalLight position={[10, 10, 5]} intensity={1} />
+                    <OrbitControls />
+
+                    {/* Sol */}
+                    <mesh receiveShadow position={[resetValues.columns / 2, -0.25, resetValues.rows / 2]}>
+                        <boxGeometry args={[resetValues.columns, 0.5, resetValues.rows]} />
+                        <meshStandardMaterial color="#388E3C" />
+                    </mesh>
+
+                    {/* Grille 3D */}
+                    {gameState.map.map((row, y) =>
+                        row.map((cell, x) => (
+                            <CellMesh key={`${x}-${y}`} x={x} y={y} type={cell} />
+                        ))
+                    )}
+                </Canvas>
+            </div>
         </div>
     );
-};
+});
 
 export default GameInstance;
