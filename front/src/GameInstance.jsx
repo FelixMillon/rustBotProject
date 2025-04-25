@@ -264,7 +264,7 @@ const GameInstance = () => {
         <div className="game-instance">
             <h3>Instance de jeu</h3>
             <div style={{ width: "100%", height: "500px" }}>
-                <Canvas camera={{ position: [10, 20, 10], fov: 100 }}>
+                <Canvas camera={{ position: [30, 20, 30], fov: 100 }}>
                     <ambientLight intensity={0.5} />
                     <directionalLight position={[10, 10, 5]} intensity={1} />
                     <OrbitControls />
