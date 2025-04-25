@@ -1,5 +1,5 @@
-import React, { useEffect, useState, forwardRef, useImperativeHandle } from "react";
-import { Canvas } from "@react-three/fiber";
+import React, { useEffect, useRef , useState, forwardRef, useImperativeHandle } from "react";
+import { Canvas, useFrame  } from "@react-three/fiber";
 import { OrbitControls, Stats, useGLTF } from "@react-three/drei";
 import axios from "axios";
 import "./App.css";
@@ -147,13 +147,38 @@ const GameInstance = forwardRef((props, ref) => {
             </group>
         );
     };
+
+
+    const EnergyCore = ({ position = [0, 0, 0], color = "yellow" }) => {
+        const meshRef = useRef();
+    
+        useFrame(() => {
+            if (meshRef.current) {
+                meshRef.current.rotation.y += 0.01;
+                meshRef.current.rotation.x += 0.005;
+            }
+        });
+    
+        return (
+            <mesh position={position} ref={meshRef}>
+                <icosahedronGeometry args={[0.7, 0]} />
+                <meshStandardMaterial 
+                    color={color}
+                    emissive={color}
+                    emissiveIntensity={1.8}
+                    metalness={0.8}
+                    roughness={0.2}
+                />
+            </mesh>
+        );
+    };
     const CellMesh = ({ x, y, type }) => {
         let color = "#333";
     
         switch (type) {
             case "8": return <Tree position={[x, 0, y]} />;
             case "C": return <Crystal position={[x, -0.4, y]}/>;
-            case "E": return <Lightning position={[x, 0, y]}/>;
+            case "E": return <EnergyCore position={[x, 1, y]}/>;
             case "S": return <Robot position={[x, 0, y]} color="lime" />;
             case "G": return <Robot position={[x, 0, y]} color="purple" />;
             case "#": return <Base position={[x, 0, y]}/>;
@@ -234,29 +259,6 @@ const GameInstance = forwardRef((props, ref) => {
     const increaseSpeed = () => setSpeed(prev => Math.max(100, prev - 100));
     const decreaseSpeed = () => setSpeed(prev => Math.min(1000, prev + 100));
 
-    const getCellClass = (cell) => {
-        switch (cell) {
-            case "C": return "cell crystal";
-            case "E": return "cell energy";
-            case "S": return "cell scout";
-            case "G": return "cell gatherer";
-            default: return "cell";
-        }
-    };
-
-    const getCellIcon = (cell) => {
-        switch (cell) {
-            case "8": return "🌳";
-            case "C": return "💎";
-            case "E": return "⚡️";
-            case "S": return "🤖";
-            case "G": return "🧑‍🌾";
-            case "#": return "🏰";
-            default: return "";
-        }
-    };
-
-    const flatMap = gameState.map.flat();
     const handleResetChange = (e) => {
         const { name, value } = e.target;
         let val = parseInt(value);
@@ -298,7 +300,7 @@ const GameInstance = forwardRef((props, ref) => {
                 </div>
             )}
             <p>💎 Crystal: {gameState.crystal_count} ⚡️ Energy: {gameState.energy_count}</p>
-            <div classname="map-container">
+            <div className="map-container">
                 <Canvas camera={{ position: [30, 20, 30], fov: 100 }}>
                     <ambientLight intensity={0.5} />
                     <directionalLight position={[10, 10, 5]} intensity={1} />
